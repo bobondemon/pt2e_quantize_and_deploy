@@ -17,6 +17,8 @@ def _quiet_noisy_dependency_loggers():
         "torch.distributed.elastic.multiprocessing.redirects"
     ).setLevel(logging.ERROR)
     logging.getLogger("torch.utils._pytree").setLevel(logging.ERROR)
+    # Linux（例如 Colab）沒有 triton 時，torchao 匯入會印「Detected no triton」；本教材只用 CPU，用不到。
+    logging.getLogger("torchao.kernel.intmm").setLevel(logging.ERROR)
 
 
 # 這兩則訊息會在下方 import torchao 時產生，必須先套用 filter；
