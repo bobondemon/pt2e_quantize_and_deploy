@@ -26,9 +26,15 @@ execute:
 website:
   title: "PT2E 端到端：模型量化、後端部署與演算法／部署的分工"
   page-navigation: true
+  repo-url: https://github.com/bobondemon/pt2e_quantize_and_deploy
+  repo-actions: [source, issue]   # 每頁的「檢視原始檔」「回報問題」連結
   sidebar:
     style: docked
     search: true
+    tools:
+      - icon: github
+        href: https://github.com/bobondemon/pt2e_quantize_and_deploy
+        aria-label: GitHub
     collapse-level: 1   # 各章預設縮起來，只展開目前頁面所在的那一章
     contents:
       - index.qmd
