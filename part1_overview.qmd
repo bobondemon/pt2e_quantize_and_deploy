@@ -119,6 +119,12 @@ Q/DQ 圖可以用 `torch.export.save` 存成 `.pt2`。
 有些路線要的 convert 選項和預設不同，所以量化流程最好保持可重跑：
 例如 OpenVINO 要 `convert_pt2e(..., fold_quantize=False)` 才轉得過（M07 概覽的路線 C）。
 
+## 延伸閱讀
+
+第一部分只講 PT2E 的機制：在哪裡量化、scale 怎麼算、怎麼訓練。量化演算法本身（AdaRound、OCTAV、EWGS 等）不在範圍內，部落格〈[量化技術路線](https://bobondemon.github.io/2024/02/17/%E9%87%8F%E5%8C%96%E6%8A%80%E8%A1%93%E8%B7%AF%E7%B7%9A/)〉把它們整理成一張地圖。
+
+LLM 常用的 outlier 處理，例如 [SmoothQuant](https://bobondemon.github.io/2023/12/28/SmoothQuant-%E7%AD%86%E8%A8%98/)、[AWQ](https://bobondemon.github.io/2023/12/28/AWQ-%E7%AD%86%E8%A8%98/)、[隨機旋轉](https://bobondemon.github.io/2026/04/29/%E9%9A%A8%E6%A9%9F%E6%97%8B%E8%BD%89%E7%9A%84%E9%87%8F%E5%8C%96%E9%AD%94%E6%B3%95/)、[SpinQuant](https://bobondemon.github.io/2026/05/14/%E8%81%8A%E8%81%8A-SpinQuant/)（部落格的筆記），改的是 fp32 模型本身（等價的 scaling 或旋轉）；照本教材的分工，屬於演算法人員在 export 之前的工作。
+
 ## 下一步
 
 [第二部分概覽](part2_overview.qmd)：Q/DQ 圖交給誰、怎麼變成 int8 kernel，以及後端怎麼把硬體限制寫成 Quantizer、交回第一部分。
