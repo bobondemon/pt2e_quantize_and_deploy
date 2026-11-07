@@ -2,8 +2,7 @@
 
 用 PyTorch 2 Export（PT2E）把模型量化成 int8，再交給 ExecuTorch + XNNPACK、ONNX Runtime 這類後端執行的動手教材。
 
-<!-- TODO：網站網址（GitHub Pages 設定好之後填入） -->
-**📖 請到網站閱讀：<網站網址>**
+**📖 請到網站閱讀：<https://bobondemon.github.io/pt2e_quantize_and_deploy/>**
 
 這個 repo 是教材的原始檔。網站把各章的 notebook、圖與表格排成一本書，有側邊欄目錄與搜尋，比在 GitHub 上逐檔點開好讀。
 
@@ -37,10 +36,9 @@
 - **讀**：在網站上依側邊欄的順序讀。每一章先有一篇概覽，講這一章要回答的問題與核心概念，之後的 notebook 逐一動手驗證。
   notebook 的輸出都已經跑好，不執行也能看到結果。
 - **自己執行**：點每本 notebook 頂端的 **Open in Colab** 按鈕，在 Colab 逐格執行、改參數再跑。
+  第一個 code cell 會下載本教材的程式並安裝固定版本的套件（第一次約需幾分鐘），之後照順序執行即可。
   模型都很小、資料是程式產生的，只用 CPU 就跑得完，不必下載資料集。
 - **在自己的電腦上執行**：用 [uv](https://docs.astral.sh/uv/) 建環境，指令寫在每一章資料夾的 `README.md`。
-
-<!-- TODO：Colab 按鈕與安裝 cell 在 repo 公開後加上 -->
 
 notebook 裡存的輸出來自 macOS arm64、Python 3.12、torch 2.14.0、torchao 0.18.0、executorch 1.5.0、onnxruntime 1.30.0。
 數值與速度和平台有關的 notebook 會先印出執行環境，再依實測結果說明。

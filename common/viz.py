@@ -24,6 +24,23 @@ from common.graph_utils import QDQ_PREFIXES, qualified_name, short
 
 FONT = "PingFang TC, Noto Sans CJK TC, Helvetica, sans-serif"
 
+
+# GitHub 的 notebook 預覽會把 SVG 裡的 UTF-8 文字（中文、…、→）顯示成 \xe5… 這種亂碼。
+# 這裡讓 graphviz 物件在 notebook 輸出的 SVG 改用 XML 字元參照（&#21069; 這類），整份 SVG 只剩 ASCII；
+# 瀏覽器、Jupyter、Quarto 顯示的結果不變。只影響 notebook 的顯示，不影響 graphviz 的其他用法。
+_svg_utf8 = graphviz.jupyter_integration.JupyterIntegration._repr_image_svg_xml
+
+
+def ascii_svg(svg: str) -> str:
+    return svg.encode("ascii", "xmlcharrefreplace").decode("ascii")
+
+
+def _repr_image_svg_xml_ascii(self) -> str:
+    return ascii_svg(_svg_utf8(self))
+
+
+graphviz.jupyter_integration.JupyterIntegration._repr_image_svg_xml = _repr_image_svg_xml_ascii
+
 # 依 node 種類決定外觀：(shape, 填色, 邊框色)
 STYLE = {
     "io": ("ellipse", "#E7F5FF", "#1C7ED6"),
