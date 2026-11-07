@@ -1,0 +1,47 @@
+# 建置 Quarto 網站並發佈到 GitHub Pages。
+# notebook 的輸出已經存在 .ipynb 裡，_quarto.yml 也設了 execute: enabled: false，
+# 所以這裡只需要 Quarto，不需要 Python、torch 等套件。
+# 第一次使用前：repo 的 Settings → Pages → Build and deployment → Source 選「GitHub Actions」。
+name: Publish site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # 也可以在 Actions 頁面手動執行
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          version: 1.11.9   # 和 pyproject.toml 的 site 群組（quarto-cli）同一版
+
+      - run: quarto render
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

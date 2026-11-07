@@ -1,0 +1,128 @@
+# 教材網站（Quarto）。notebook 不在建置時執行，直接用存在 .ipynb 裡的輸出。
+#   預覽： uv run --group site quarto preview
+#   建置： uv run --group site quarto render   （輸出到 _site/）
+project:
+  type: website
+  output-dir: _site
+  render:
+    - index.qmd
+    - part1_overview.qmd
+    - part2_overview.qmd
+    - m00_export_basics/*.ipynb
+    - m01_hello_pt2e/*.ipynb
+    - m02_observer_fakequant/*.ipynb
+    - m03_quantizer_api/*.ipynb
+    - m04_conv_bn_folding/*.ipynb
+    - m05_ptq_pipeline/*.ipynb
+    - m06_qat_pipeline/*.ipynb
+    - m07_representation_lowering/*.ipynb
+    - m08_xnnpack_executorch/*.ipynb
+    - m09_onnx_runtime/*.ipynb
+    - m10_custom_backend/*.ipynb
+
+execute:
+  enabled: false
+
+website:
+  title: "PT2E 端到端：模型量化、後端部署與演算法／部署的分工"
+  page-navigation: true
+  sidebar:
+    style: docked
+    search: true
+    collapse-level: 1   # 各章預設縮起來，只展開目前頁面所在的那一章
+    contents:
+      - index.qmd
+      - section: "M00 torch.export 與 fx 圖"
+        contents:
+          - m00_export_basics/00_overview.ipynb
+          - m00_export_basics/01_export_and_inspect.ipynb
+          - m00_export_basics/02_eval_vs_train.ipynb
+          - m00_export_basics/03_decomposition.ipynb
+          - m00_export_basics/04_fx_graph_editing.ipynb
+      - text: "第一部分概覽：fp32 模型 → Q/DQ 圖"
+        href: part1_overview.qmd
+      - section: "M01 第一次量化"
+        contents:
+          - m01_hello_pt2e/00_overview.ipynb
+          - m01_hello_pt2e/01_minimal_ptq.ipynb
+          - m01_hello_pt2e/02_graph_diff.ipynb
+          - m01_hello_pt2e/03_config_matrix.ipynb
+      - section: "M02 observer 與 fake quant"
+        contents:
+          - m02_observer_fakequant/00_overview.ipynb
+          - m02_observer_fakequant/01_observer_zoo.ipynb
+          - m02_observer_fakequant/02_manual_insert.ipynb
+          - m02_observer_fakequant/03_observer_to_qdq.ipynb
+      - section: "M03 標籤與 Quantizer"
+        contents:
+          - m03_quantizer_api/00_overview.ipynb
+          - m03_quantizer_api/01_annotate_then_prepare.ipynb
+          - m03_quantizer_api/02_read_annotations.ipynb
+          - m03_quantizer_api/03_my_first_quantizer.ipynb
+          - m03_quantizer_api/04_shared_and_implicit_sharing.ipynb
+          - m03_quantizer_api/05_derived_and_fixed_qparams.ipynb
+          - m03_quantizer_api/06_partial_quantization.ipynb
+          - m03_quantizer_api/07_backend_config_api.ipynb
+      - section: "M04 Conv + BN 折疊"
+        contents:
+          - m04_conv_bn_folding/00_overview.ipynb
+          - m04_conv_bn_folding/01_bn_folding_trace.ipynb
+          - m04_conv_bn_folding/02_qat_graph_structure.ipynb
+          - m04_conv_bn_folding/03_qat_vs_article.ipynb
+      - section: "M05 PTQ 精度除錯"
+        contents:
+          - m05_ptq_pipeline/00_overview.ipynb
+          - m05_ptq_pipeline/01_ptq_full.ipynb
+          - m05_ptq_pipeline/02_calibration_study.ipynb
+          - m05_ptq_pipeline/03_layerwise_sqnr.ipynb
+          - m05_ptq_pipeline/04_mixed_precision.ipynb
+          - m05_ptq_pipeline/05_weight_norm_ptq.ipynb
+      - section: "M06 QAT 訓練流程"
+        contents:
+          - m06_qat_pipeline/00_overview.ipynb
+          - m06_qat_pipeline/01_qat_minimal.ipynb
+          - m06_qat_pipeline/02_train_eval_switch.ipynb
+          - m06_qat_pipeline/03_fused_fakequant_mismatch.ipynb
+          - m06_qat_pipeline/04_qat_vs_ptq_int4.ipynb
+          - m06_qat_pipeline/05_learnable_fake_quant.ipynb
+          - m06_qat_pipeline/06_weight_norm_qat.ipynb
+      - text: "第二部分概覽：Q/DQ 圖之後"
+        href: part2_overview.qmd
+      - section: "M07 後端部署總覽"
+        contents:
+          - m07_representation_lowering/00_overview.ipynb
+          - m07_representation_lowering/01_fp32_numeric_floor.ipynb
+          - m07_representation_lowering/02_representation_and_lowering.ipynb
+      - section: "M08 XNNPACK／ExecuTorch"
+        contents:
+          - m08_xnnpack_executorch/00_overview.ipynb
+          - m08_xnnpack_executorch/01_executorch_vs_torchao_copy.ipynb
+          - m08_xnnpack_executorch/02_export_to_pte.ipynb
+          - m08_xnnpack_executorch/03_unsupported_ops.ipynb
+          - m08_xnnpack_executorch/04_latency.ipynb
+      - section: "M09 ONNX Runtime"
+        contents:
+          - m09_onnx_runtime/00_overview.ipynb
+          - m09_onnx_runtime/01_onnx_qdq_export.ipynb
+          - m09_onnx_runtime/02_ort_qdq_fusion.ipynb
+          - m09_onnx_runtime/03_qdq_fusion_coverage.ipynb
+          - m09_onnx_runtime/04_ort_quant_compare.ipynb
+      - section: "M10 自訂後端"
+        contents:
+          - m10_custom_backend/00_overview.ipynb
+          - m10_custom_backend/01_vpu_quantizer.ipynb
+          - m10_custom_backend/02_constraint_checker.ipynb
+          - m10_custom_backend/03_fallback_report.ipynb
+
+format:
+  html:
+    theme: cosmo
+    lang: zh-Hant
+    language:
+      toc-title-document: "本頁內容"
+    grid:
+      body-width: 900px
+    toc: true
+    toc-depth: 2
+    code-overflow: wrap
+    highlight-style: github

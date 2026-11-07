@@ -1,0 +1,143 @@
+---
+title: "第二部分概覽 | Q/DQ 圖之後：交給後端（M07～M10）"
+---
+
+[第一部分](part1_overview.qmd)的終點是 Q/DQ 圖：哪裡量化、用什麼 qparams 都寫在圖上了，但運算仍是 fp32，它**不會變快**。
+第二部分（M07～M10）回答接下來的事：誰把圖上的量化運算換成真正的 int8 kernel、在哪一步換、換不了的怎麼辦、換完之後數值與速度怎麼確認。
+最後一章反過來站在後端那一側，把硬體限制寫成 Quantizer，交回第一部分使用。
+
+## 一張圖看完第二部分
+
+每個後端要找的都是 Q/DQ 圖上的**單元**：一段 dq → op → q。
+它的語意是 int8 進、int8 出，中間的運算仍是 fp32（M07 概覽）：
+
+```text
+int8 ─ dq ─→ fp32 ─ conv2d、relu ─→ fp32 ─ q ─→ int8
+```
+
+認出這個單元、換成一顆 int8 kernel，是第二部分每一章的主軸。四章看四個地方怎麼做：
+
+```{mermaid}
+flowchart LR
+    QDQ["Q/DQ 圖<br/>第一部分的終點"]
+    QDQ --> P["PyTorch 裡<br/>reference／x86 lowering／Inductor<br/>M07"]
+    QDQ --> A["重新 export → .pte<br/>ExecuTorch + XNNPACK<br/>M08"]
+    QDQ --> B["torch.onnx.export → QDQ ONNX<br/>ONNX Runtime + MLAS<br/>M09"]
+    QDQ --> C["自訂 VPU<br/>檢查 Q/DQ 圖、切回 CPU<br/>M10"]
+```
+
+## 故事線：三段
+
+### 地圖與規矩（M07）
+
+| 問題 | 一句話的答案 |
+|---|---|
+| ExecuTorch、ORT、XNNPACK 是同一種東西嗎？ | 不是：推論框架、硬體擴充單位、kernel 函式庫是三層 |
+| 從 Q/DQ 圖出發有幾條路？ | 三條，差在橋接步驟，與「誰、在哪一步」認出單元 |
+| 量化之前要先決定什麼？ | 部署後端：Quantizer 要照那個後端的 kernel 設計 |
+| PyTorch 自己能把單元變成整數嗎？ | 要有對上的 pattern；作者環境的 conv 都沒變成 int8 |
+| 比較兩種實作的數值前要知道什麼？ | fp32 換個 kernel 就差 1e-5～1e-4，這是底線 |
+
+細節都在 [M07 概覽](m07_representation_lowering/00_overview.ipynb)：前半是 M07～M10 共用的地圖，後半是 M07 本章。
+
+### 兩條真實的路線（M08、M09）
+
+同一張 Q/DQ 圖，交給兩個在 CPU 上真的有 int8 kernel 的後端，問的是同一組問題：
+
+| 問題 | M08：ExecuTorch + XNNPACK | M09：ONNX Runtime |
+|---|---|---|
+| 部署檔 | `.pte` | QDQ ONNX（`.onnx`） |
+| 誰認出單元 | `XnnpackPartitioner` | ORT 的 QDQ node fusion |
+| 什麼時候 | 匯出時 | 建 session 時，`ORT_ENABLE_EXTENDED` 起 |
+| kernel 函式庫 | XNNPACK | CPU EP 的 MLAS |
+| 不支援的 op | 切成多個 delegate，中間跑 portable kernel | 留在 fp32，前後各一次 int8 ↔ fp32 |
+| Q/DQ 圖裡的 fp32 bias | lowering 時量化成 int32 | `ORT_ENABLE_BASIC` 起量化成 int32 |
+| 和 Q/DQ 圖的輸出 | 不保證逐位元相同，誤差同量級 | 同左 |
+
+兩章各有一個旁支：M08-1 說明兩份同名的 `XNNPACKQuantizer`（匯出 `.pte` 用 executorch 版）；
+M09-4 比較 ORT 自己的 `quantize_static`，以及 QDQ format 與 QOperator format（誰決定換成 int8 op）。
+
+### 站到後端那一側（M10）
+
+M08、M09 的後端很寬鬆；NPU、VPU 類的硬體通常窄得多。M10 虛構一顆 VPU，做後端作者要做的三件事：
+
+```text
+硬體約束
+  → MyVPUQuantizer     約束寫成標籤：qscheme、pow2 observer、Shared、Derived
+  → validate()         標籤表達不了的條件（static shape），prepare 時就擋
+  → check_vpu()        只讀 Q/DQ 圖，檢查約束有沒有真的落實
+  → partition()        清單外的 op 切回 CPU，報告子圖與邊界
+```
+
+兩個結論把第二部分接回第一部分：
+
+- 後端不能只信 Quantizer：XNNPACK 的 Q/DQ 圖在 CPU 上合理，卻違反這顆 VPU 的五條規則（M10-2）。
+- Quantizer 與 partitioner 讀同一份 op 清單，模型能有多少跑在加速器上，選架構時就決定了（M10-3）。
+
+## 反覆出現的四個檢查
+
+| 檢查 | 怎麼做 | 出處 |
+|---|---|---|
+| 哪些 op 沒變成 int8 | 量化前看標籤；部署前看 delegation 表、fusion 清單或 fallback 報告 | M08-3、M09-3、M10-3 |
+| 數值對不對 | 先知道 fp32 底線，只比最後輸出 | M07-1 |
+| 有沒有變快 | 基準是同一個 runtime 的 fp32，不是 PyTorch eager | M08-4 |
+| 圖合不合硬體規格 | 寫一個只讀 Q/DQ 圖的檢查 pass | M10-2 |
+
+「只比最後輸出」用四個指標（M07 概覽〈比較後端之前的規矩〉）：
+
+| 指標 | 回答什麼 |
+|---|---|
+| 對 fp32 的 SQNR、accuracy | 精度有沒有變差 |
+| 輸出逐位元相同的比例 | 和 Q/DQ 圖有多接近 |
+| argmax 一致率 | 分類結果有沒有變 |
+| 最大差幾個輸出 LSB | 差異是不是只是捨入 |
+
+## 第二部分的角色：後端部署人員
+
+實務上，第二部分通常由**後端部署人員**負責：確認目標平台、提供 Quantizer，
+拿到 Q/DQ 圖之後做圖優化、加速、除錯與精度確認，直到模型在裝置上跑起來。
+兩種角色怎麼合作，見[首頁](index.qmd)〈兩種角色〉。
+
+### 量化之前，交給演算法人員
+
+| 交付物 | 內容 | 相關章節 |
+|---|---|---|
+| Quantizer | 照目標 kernel 設計的標籤規則，含 PTQ 與 QAT 設定 | M07 概覽、M10-1 |
+| op 清單 | 哪些 op 有 int8 kernel；清單外的 op 會把圖切段 | M09-3、M10-3 |
+| 硬體限制 | static shape、位元數、scale 的形式（例如 2 的冪次） | M10-1 |
+| QAT 設定的驗證 | 確認 fake quant 圖與 convert 圖輸出一致 | M06-3 |
+| 匯出要求 | 例如 OpenVINO 要 `convert_pt2e(..., fold_quantize=False)` | M07 概覽 |
+
+Quantizer 最好附上 `validate()`：標籤表達不了的限制，在 prepare 時就報錯，
+不要等到演算法人員訓練完、交付之後才發現（M10-1）。
+
+### 拿到 Q/DQ 圖之後
+
+```text
+收到 Q/DQ 圖、fp32 模型、資料與精度報告
+  → 合規檢查      scale、zero point、bias、shape 合不合硬體（M10-2）
+  → lowering      產生 .pte、建 ORT session，或自己的 compiler（M08、M09）
+  → 圖優化        例如 ORT 的最佳化等級：fusion、layout（M09-2）
+  → fallback 報告 哪些 op 沒進加速器、切成幾段（M08-3、M10-3）
+  → 數值驗證      先量 fp32 底線，再比裝置輸出與 Q/DQ 圖（M07-1）
+  → 速度          和同一個 runtime 的 fp32 比（M08-4）
+  → 回報          要演算法人員改的地方，附上數字
+```
+
+常見要回報給演算法人員的事：清單外的 op（建議換成清單內的，例如 M10-3 的 sigmoid → relu）、
+裝置上精度掉了但 Q/DQ 圖沒掉（後端自己查），以及速度不夠時是否值得改模型。
+
+### 問題歸給誰：用數值切開
+
+| 現象 | 先查誰 | 工具 |
+|---|---|---|
+| Q/DQ 圖對 fp32 的精度就掉了 | 演算法人員：量化設定或模型 | 逐層 SQNR（M05）、QAT（M06） |
+| Q/DQ 圖正常，裝置輸出差很多 | 後端部署人員：lowering 或 kernel | 只比最後輸出的四個指標（M07） |
+| 裝置與 Q/DQ 圖只差 1～2 個輸出 LSB | 正常的整數捨入，不必追 | M08、M09 的實測 |
+| op 沒進加速器、速度不夠 | 雙方一起：換 op 或調整切圖 | fallback 報告（M10-3） |
+
+「差很多」指的是超出捨入的量級：遠大於幾個輸出 LSB，或對 fp32 的 SQNR 明顯比 Q/DQ 圖低。
+
+## 回到全貌
+
+兩部分怎麼接、兩種角色怎麼合作，見[首頁](index.qmd)。

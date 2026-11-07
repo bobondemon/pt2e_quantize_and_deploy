@@ -1,0 +1,124 @@
+---
+title: "第一部分概覽 | 從 fp32 模型到 Q/DQ 圖（M01～M06）"
+---
+
+M00 把模型抓成一張圖，也學會怎麼改圖。第一部分（M01～M06）在這張圖上做量化：
+輸入是訓練好的 fp32 模型，輸出是 `convert_pt2e` 產生的 **Q/DQ 圖**，以及在 Q/DQ 圖上量到的精度。
+
+Q/DQ 圖是第一部分的終點，也是[第二部分](part2_overview.qmd)的起點。
+這篇只給故事線與分工；每章的定義、公式與實驗，在各章的概覽與 notebook。
+
+## 一張圖看完第一部分
+
+PT2E 只有幾個 API 呼叫，六章各打開其中一段：
+
+```text
+fp32 模型
+  → torch.export        抓成 ATen op 組成的圖（M00）
+  → prepare             Quantizer 貼標籤，再照標籤插 observer（M02、M03）
+  → 校準或訓練          PTQ 校準算 scale；QAT 訓練 weight（M05、M06）
+  → convert_pt2e        observer 換成 q/dq，weight 存成 int8（M02）
+  → Q/DQ 圖             交給第二部分
+```
+
+prepare 在 PTQ 是 `prepare_pt2e`（插 observer），在 QAT 是 `prepare_qat_pt2e`（插 fake quant）。
+Conv + BN 的折疊不是獨立的一步：PTQ 在 prepare 一開始就折，QAT 留到 convert 才折（M04）。
+
+## 故事線：三段
+
+### 先走一遍（M01）
+
+| 章節 | 問題 | 一句話的答案 |
+|---|---|---|
+| [M01](m01_hello_pt2e/00_overview.ipynb) | 量化要決定哪些事？ | 量化哪些 tensor、每個 tensor 的 scale／zero point、怎麼交給後端 |
+| | PT2E 在哪裡回答它們？ | 依序是 Quantizer 的標籤、observer 的校準、convert 產生的 q/dq |
+
+M01 也先講清楚一件事：Q/DQ 圖的運算仍是 fp32，只在數值上模擬 int8，**不會變快**。
+
+### 打開三個黑盒子（M02～M04）
+
+| 章節 | 問題 | 一句話的答案 |
+|---|---|---|
+| [M02](m02_observer_fakequant/00_overview.ipynb) | prepare 與 convert 對圖做了什麼？ | 只是改圖：插 observer，再換成 q/dq 並把 weight 預先量化 |
+| [M03](m03_quantizer_api/00_overview.ipynb) | observer 插在哪裡由誰決定？ | Quantizer 在 node 上貼的標籤；prepare 自己不知道哪裡該量化 |
+| [M04](m04_conv_bn_folding/00_overview.ipynb) | BN 怎麼折進 conv？ | PTQ 在 prepare 折；QAT 保留 BN 訓練，convert 才折 |
+
+這三章拆開的是同一條流程：M02 看「怎麼插」、M03 看「插在哪」、M04 看「插之前圖先被改了什麼」。
+
+### 用在訓練好的模型上（M05、M06）
+
+| 章節 | 問題 | 一句話的答案 |
+|---|---|---|
+| [M05](m05_ptq_pipeline/00_overview.ipynb) | PTQ 之後精度掉了，往哪裡查？ | 輸出 SQNR → 換校準資料 → 逐層 SQNR → 排除候選並重量 |
+| [M06](m06_qat_pipeline/00_overview.ipynb) | PTQ 不夠時，QAT 怎麼訓練？ | 用 STE 訓練 fake quant 圖，並確保訓練時的圖等於 convert 之後的圖 |
+
+M05、M06 都用同一個訓練好的 `TinyConvNet`：int8 下 PTQ 已經貼著 fp32，int4 下 QAT 才明顯追回 PTQ 掉的精度（M06-4）。
+
+## 貫穿第一部分的規則
+
+| 規則 | 出處 |
+|---|---|
+| Q/DQ 圖仍是 fp32 運算，只模擬 int8，不會變快 | M01、M02-3 |
+| prepare／convert 不知道後端；量化位置與規格全由 Quantizer 決定 | M03 |
+| 換了 Quantizer 或版本，先 dump 標籤，確認哪些 op 真的被量化 | M03-2 |
+| PTQ 與 QAT 在不同步驟折 BN，convert 之後的圖相同 | M04 |
+| PTQ 用對 fp32 輸出的 SQNR；逐層分數是線索，要用實驗確認 | M05 |
+| QAT 的 fake quant 圖（freeze 後）與 convert 圖輸出要一致 | M06-3 |
+| QAT 用 test loss，基準是同樣配方再訓練的 fp32 | M06-4 |
+
+最後一個問題留給第二部分：在 Q/DQ 圖上量到的精度，能不能代表部署之後的精度？
+答案是可以當代表，但不保證逐位元相同：後端用真正的整數 kernel，捨入位置不同，
+M08 的實測差異多半只有 1 個輸出 LSB，對 fp32 的 SQNR 幾乎一樣。
+
+## 第一部分的角色：演算法人員
+
+實務上，第一部分通常由**演算法人員**負責：為問題建立模型、訓練、量化，交付 Q/DQ 圖。
+但量化的規則不是演算法人員自己定的，Quantizer 是照後端的 kernel 設計的（M03、[M07 概覽](m07_representation_lowering/00_overview.ipynb)〈量化之前，先選後端〉）。
+所以這個角色的工作，從「向後端拿資訊」開始，到「交付 Q/DQ 圖與證據」結束。
+兩種角色怎麼合作，見[首頁](index.qmd)〈兩種角色〉。
+
+### 開工前，向後端部署人員拿到什麼
+
+最好在**設計模型之前**拿到，不只是量化之前：op 清單會影響架構的選擇。
+
+| 項目 | 為什麼需要 | 相關章節 |
+|---|---|---|
+| 目標平台的 Quantizer（PTQ、QAT 設定） | 量化位置與規格要配合後端的 kernel | M03、M07 概覽 |
+| 支援 int8 的 op 清單 | 清單外的 op 留在 fp32，還會把圖切成好幾段 | M08-3、M10-3 |
+| shape 與位元數的限制 | 例如只吃 static shape 的後端，prepare 時就會報錯 | M10-1 |
+| 驗證過的 QAT 設定 | XNNPACK 預設的 fused fake quant 讓訓練圖 ≠ convert 圖 | M06-3 |
+
+### 職責
+
+| 工作 | 做法 | 章節 |
+|---|---|---|
+| 建立、訓練 fp32 模型 | 優先用清單內的 op；保留 fp32 模型當基準 | — |
+| export | 依後端決定 static 或動態 batch | M00 |
+| PTQ | 用具代表性的校準資料，看結果的波動 | M05-1、M05-2 |
+| 精度除錯 | 逐層 SQNR 找候選，再用排除實驗確認 | M05-3、M05-4 |
+| QAT | PTQ 不夠時才做；評估前 BN 切 eval、關 observer | M06 |
+| 特殊結構 | weight_norm 這類由別的參數算出的 weight，折 BN 前換成常數 | M05-5、M06-6 |
+| 確認 Q/DQ 圖的精度 | 交付前最後一個數字，也是後端的比較基準 | M05、M06 |
+
+### 交付給後端部署人員什麼
+
+只交 Q/DQ 圖不夠。後端要能重現、比較、除錯：
+
+| 交付物 | 後端拿來做什麼 |
+|---|---|
+| Q/DQ 圖 | lowering 的輸入 |
+| fp32 模型 | 數值比較的基準，查精度落差從哪來 |
+| 範例輸入與 shape | 重新 export、memory planning |
+| 校準與評估資料 | 在裝置上重跑評估；必要時重新 convert |
+| Q/DQ 圖上的精度報告 | 裝置上的結果要和它比 |
+
+Q/DQ 圖可以用 `torch.export.save` 存成 `.pt2`。
+作者環境試作：M09 用的 Q/DQ 圖存檔再 `torch.export.load`，輸出逐位元相同，
+載入的圖可以直接匯出 QDQ ONNX，也可以 lower 成 ExecuTorch 的 `.pte`。
+
+有些路線要的 convert 選項和預設不同，所以量化流程最好保持可重跑：
+例如 OpenVINO 要 `convert_pt2e(..., fold_quantize=False)` 才轉得過（M07 概覽的路線 C）。
+
+## 下一步
+
+[第二部分概覽](part2_overview.qmd)：Q/DQ 圖交給誰、怎麼變成 int8 kernel，以及後端怎麼把硬體限制寫成 Quantizer、交回第一部分。

@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+outputs/
+*.pte
+*.onnx
+_site/
+.quarto/
+**/*.quarto_ipynb
+
+/.quarto/
+
+# 本機專用：Claude Code 的維護規則與編輯器設定，不發佈
+CLAUDE.local.md
+.vscode/

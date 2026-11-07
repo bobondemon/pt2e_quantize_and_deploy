@@ -1,0 +1,49 @@
+[project]
+name = "pt2e-study"
+version = "0.1.0"
+description = "Hands-on study repo for PyTorch PT2E (torch.export-based) quantization"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch>=2.14",
+    "torchvision",
+    "torchao>=0.18",
+    "numpy",
+    "matplotlib",
+    "tabulate",
+    "wcwidth",
+    "onnx",
+    "onnxscript",
+    "onnxruntime",
+    "pytest",
+    # 互動教材：notebook 執行環境 + graphviz 子圖（系統另需 graphviz 的 dot 執行檔）
+    "graphviz",
+    "ipykernel",
+    "jupyterlab",
+    "jupytext",
+    "nbconvert",
+]
+
+# 讓 `common/` 以 editable 方式安裝進 .venv，
+# 這樣任何子目錄下的腳本都能直接 `from common.xxx import ...`
+[build-system]
+requires = ["uv_build>=0.12.7,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+module-name = "common"
+
+# 選用：M08 (ExecuTorch / XNNPACK 後端) 才需要，體積較大
+# 安裝方式： uv sync --group executorch
+[dependency-groups]
+executorch = ["executorch>=1.5"]
+# 建置教材網站（Quarto，pip 版自帶 quarto 執行檔）： uv sync --group site
+site = ["quarto-cli"]
+
+# Cursor / basedpyright：明確指向 uv 的 .venv，避免跟 symlink 走到沒裝套件的基底 Python
+[tool.basedpyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+extraPaths = [".venv/lib/python3.12/site-packages"]
