@@ -1,5 +1,9 @@
 # PT2E 端到端：模型量化、後端部署與演算法／部署的分工
 
+[![Website](https://img.shields.io/badge/%E7%B6%B2%E7%AB%99-%E9%96%B1%E8%AE%80%E6%95%99%E6%9D%90-blue)](https://bobondemon.github.io/pt2e_quantize_and_deploy/)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/bobondemon/pt2e_quantize_and_deploy/blob/main/m01_hello_pt2e/00_overview.ipynb)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 用 PyTorch 2 Export（PT2E）把模型量化成 int8，再交給 ExecuTorch + XNNPACK、ONNX Runtime 這類後端執行的動手教材。
 
 **📖 請到網站閱讀：<https://bobondemon.github.io/pt2e_quantize_and_deploy/>**
