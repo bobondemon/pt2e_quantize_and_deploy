@@ -26,8 +26,23 @@
 | 做什麼 | fp32 模型 → PTQ／QAT → Q/DQ 圖 | Q/DQ 圖 → 後端的 int8 kernel → 裝置 |
 | 角色 | 演算法人員：建模、訓練、量化 | 後端部署人員：選定平台、提供 Quantizer、lowering 與驗證 |
 
-兩種角色不是各做各的：Quantizer 是後端照自己的 kernel 設計的，所以要先選後端、再量化。
-交接的內容、合作的順序、精度掉了先查哪一段，詳見網站首頁（[index.qmd](index.qmd)）。
+兩種角色不是各做各的：Quantizer 是後端照自己的 kernel 設計的，所以要先選後端、再量化。合作的順序：
+
+```mermaid
+sequenceDiagram
+    participant A as 演算法人員
+    participant B as 後端部署人員
+    B->>A: Quantizer、op 清單、shape 與位元數限制
+    A->>A: 設計並訓練 fp32 模型，避開清單外的 op
+    A->>A: PTQ 或 QAT，在 Q/DQ 圖上確認精度
+    A->>B: Q/DQ 圖、fp32 模型、資料、精度報告
+    B->>B: 合規檢查、lowering、fallback 報告
+    B->>B: 數值與速度驗證
+    B-->>A: 回報 fallback 的 op、精度落差、速度
+    A->>B: 修改後的 Q/DQ 圖
+```
+
+最後兩步通常會來回好幾次。交接的內容、精度掉了先查哪一段，詳見[網站首頁](https://bobondemon.github.io/pt2e_quantize_and_deploy/)。
 
 ## 怎麼讀、怎麼執行
 
