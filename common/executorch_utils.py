@@ -6,6 +6,7 @@
 import common.pt2e  # noqa: F401  # 必須先於 executorch（它會 import torchao）：先壓掉 import 期間的雜訊 log
 
 import torch
+import executorch.backends.xnnpack.xnnpack_preprocess as _xnn_preprocess  # pyright: ignore[reportMissingImports]
 from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPartitioner  # pyright: ignore[reportMissingImports]
 from executorch.devtools.backend_debug import get_delegation_info  # pyright: ignore[reportMissingImports]
 from executorch.exir import to_edge_transform_and_lower  # pyright: ignore[reportMissingImports]
@@ -15,7 +16,7 @@ from common.data import calibration_batches
 from common.env import capture_stderr
 from common.pt2e import convert_pt2e, export_module, get_xnnpack_quantizer, prepare_pt2e
 
-__all__ = ["delegation_summary", "get_delegation_info", "lower_to_xnnpack", "PteRunner", "xnnpack_ptq"]
+__all__ = ["delegation_summary", "get_delegation_info", "lower_to_xnnpack", "PteRunner", "xnnpack_nodes", "xnnpack_ptq"]
 
 
 def xnnpack_ptq(model, example_inputs, n_calib=128):
@@ -56,6 +57,46 @@ def delegation_summary(edge):
     info = get_delegation_info(edge.exported_program().graph_module)
     by_op = {k: (v.delegated, v.non_delegated) for k, v in info.delegation_by_operator.items()}
     return info.num_delegated_subgraphs, info.num_delegated_nodes, info.num_non_delegated_nodes, by_op
+
+
+def xnnpack_nodes(gm, example_inputs):
+    """再 lower 一次，回傳每個 delegate 裡 XNNPACK 的 node：[[(node, 輸入 dtype, 輸出 dtype, 輸出 clamp), ...], ...]。
+
+    XNNPACK backend 在 lowering 時把 delegate 的子圖重建成自己的圖（XNNGraph），再序列化進 .pte；
+    這裡在序列化之前把那張圖攔下來。dtype 是 XNNPACK 的寫法：qint8（per-tensor int8）、qcint8／qcint32
+    （per-channel 的 int8 weight／int32 bias）、fp32。clamp 是融合進 node 的輸出範圍（例如 relu → [0, +inf]）。
+
+    注意：依賴 executorch 1.5.0 的內部結構（`xnnpack_preprocess.serialize_xnnpack_binary` 與 XNNGraph 的欄位），
+    不是公開 API，換版本可能要改。
+    """
+    graphs = []
+    original = _xnn_preprocess.serialize_xnnpack_binary
+
+    def spy(xnn_graph, *args, **kwargs):
+        graphs.append(xnn_graph)
+        return original(xnn_graph, *args, **kwargs)
+
+    _xnn_preprocess.serialize_xnnpack_binary = spy
+    try:
+        lower_to_xnnpack(gm, example_inputs)
+    finally:
+        _xnn_preprocess.serialize_xnnpack_binary = original
+    return [_xnn_rows(g) for g in graphs]
+
+
+def _xnn_rows(xnn_graph):
+    dtype = {}
+    for v in xnn_graph.xvalues:
+        tensor = getattr(v.xvalue_union, "tensor_value", v.xvalue_union)  # 量化的 tensor 多包一層
+        dtype[tensor.id_out] = tensor.datatype.name.removeprefix("xnn_datatype_")
+    rows = []
+    for node in xnn_graph.xnodes:
+        op = node.xnode_union
+        ins = [dtype[v] for k, v in vars(op).items() if k.endswith("_id") and k != "output_id" and isinstance(v, int)]
+        mm = node.output_min_max
+        clamp = f"[{mm.output_min}, {mm.output_max}]" if mm is not None else ""
+        rows.append((type(op).__name__, ", ".join(ins), dtype[op.output_id], clamp))
+    return rows
 
 
 class PteRunner:

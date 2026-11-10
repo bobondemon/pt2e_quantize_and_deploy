@@ -9,7 +9,7 @@
 |---|---|
 | [00_overview.ipynb](00_overview.ipynb) | 概覽：conv + relu 用原始 API 走完 PT2E → lowering → `.pte` → runtime；Edge dialect、partitioner、delegate、memory planning；lowering 時 q/dq 去哪了；和 Q/DQ 圖的數值差異 |
 | [01_executorch_vs_torchao_copy.ipynb](01_executorch_vs_torchao_copy.ipynb) | M08-1：兩份同名的 `XNNPACKQuantizer` 差在哪；static 與 dynamic 的規格；`set_module_name` 對 conv 不生效 |
-| [02_export_to_pte.ipynb](02_export_to_pte.ipynb) | M08-2：lowering 前後的圖、`.pte` 的大小、用 ExecuTorch runtime 執行、換 batch 為什麼失敗 |
+| [02_export_to_pte.ipynb](02_export_to_pte.ipynb) | M08-2：lowering 前後的圖、delegate 裡 XNNPACK 實際執行的 node、`.pte` 的大小、用 ExecuTorch runtime 執行、換 batch 為什麼失敗 |
 | [03_unsupported_ops.ipynb](03_unsupported_ops.ipynb) | M08-3：XNNPACK 不收的 op 把圖切成兩個 delegate，邊界上傳 fp32 |
 | [04_latency.ipynb](04_latency.ipynb) | M08-4：eager、Q/DQ 圖、fp32 `.pte`、int8 `.pte` 的 latency；收益分成換 runtime 與量化兩段 |
 
