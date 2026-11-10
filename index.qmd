@@ -1,9 +1,12 @@
 ---
-title: "PT2E 端到端：模型量化、後端部署與演算法／部署的分工"
+title: "PT2E 端到端：邊緣裝置的量化、後端部署與演算法／部署的分工"
 ---
 
-用 PyTorch 2 Export（PT2E）把模型量化成 int8：從 `torch.export` 拿到的圖開始，看 quantizer 怎麼標註、observer 怎麼插、
+用 PyTorch 2 Export（PT2E）把模型量化成 int8 等低位元整數：從 `torch.export` 拿到的圖開始，看 quantizer 怎麼標註、observer 怎麼插、
 convert 之後的圖長什麼樣，最後交給 XNNPACK、ONNX Runtime 這類後端。
+
+這份教材的對象是算力與功耗有限的邊緣裝置（例如 always-on 的感測、語音喚醒）：模型小、整張圖跑整數（以 int8 為主）、shape 固定、後端支援的 op 有限。
+LLM 常見的 weight-only int4、KV cache 量化不在範圍內。
 
 每個模組先有一篇**概覽**，講這一章要回答的問題與核心概念；之後的 notebook 逐一動手驗證。
 notebook 裡的輸出都已經跑好，直接讀就能看到結果；想自己改參數再跑，請見下方「在自己的電腦上執行」。
@@ -58,7 +61,7 @@ Quantizer 就是兩個部分之間的約定。
 
 時間不多的話，先讀這四篇掌握全貌，再挑需要的章節深入：
 
-1. 本篇：PT2E 端到端：模型量化、後端部署與演算法／部署的分工
+1. 本篇：PT2E 端到端：邊緣裝置的量化、後端部署與演算法／部署的分工
 2. [M00 概覽 | 把模型變成一張圖：torch.export、ATen 與 fx](m00_export_basics/00_overview.ipynb)
 3. [第一部分概覽 | 從 fp32 模型到 Q/DQ 圖（M01～M06）](part1_overview.qmd)
 4. [第二部分概覽 | Q/DQ 圖之後：交給後端（M07～M10）](part2_overview.qmd)
