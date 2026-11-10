@@ -6,6 +6,9 @@
 
 用 PyTorch 2 Export（PT2E）把模型量化成 int8，再交給 ExecuTorch + XNNPACK、ONNX Runtime 這類後端執行的動手教材。
 
+這份教材的對象是算力與功耗有限的邊緣裝置（例如 always-on 的感測、語音喚醒）：模型小、整張圖跑整數（以 int8 為主）、shape 固定、後端支援的 op 有限。
+LLM 常見的 weight-only int4、KV cache 量化不在範圍內。
+
 **📖 請到網站閱讀：<https://bobondemon.github.io/pt2e_quantize_and_deploy/>**
 
 這個 repo 是教材的原始檔。網站把各章的 notebook、圖與表格排成一本書，有側邊欄目錄與搜尋，比在 GitHub 上逐檔點開好讀。
