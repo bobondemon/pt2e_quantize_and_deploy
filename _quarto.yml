@@ -23,6 +23,9 @@ project:
 execute:
   enabled: false
 
+# 網站的介面字串（目錄、檢視原始檔、回報問題、搜尋…）用這份繁體；理由見檔案開頭的註解
+language: _language-zh-TW.yml
+
 website:
   title: "PT2E 端到端：邊緣裝置的量化、後端部署與演算法／部署的分工"
   page-navigation: true
@@ -123,9 +126,7 @@ website:
 format:
   html:
     theme: cosmo
-    lang: zh-Hant
-    language:
-      toc-title-document: "本頁內容"
+    lang: zh-Hant   # Pandoc 認得 zh-Hant；Quarto 會把它退回簡體的 zh，所以介面字串改用上面的 language 檔
     grid:
       body-width: 900px
     toc: true
