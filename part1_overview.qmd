@@ -60,7 +60,7 @@ M05、M06 都用同一個訓練好的 `TinyConvNet`：int8 下 PTQ 已經貼著 
 |---|---|
 | Q/DQ 圖仍是 fp32 運算，只模擬 int8，不會變快 | M01、M02-3 |
 | prepare／convert 不知道後端；量化位置與規格全由 Quantizer 決定 | M03 |
-| 換了 Quantizer 或版本，先 dump 標籤，確認哪些 op 真的被量化 | M03-2 |
+| 換了 Quantizer、版本或設定（例如 `set_module_name`），先畫出標籤，convert 後再確認 q/dq 真的插上；漏標不會報錯 | M03-2、M03-7、M08-1 |
 | PTQ 與 QAT 在不同步驟折 BN，convert 之後的圖相同 | M04 |
 | PTQ 用對 fp32 輸出的 SQNR；逐層分數是線索，要用實驗確認 | M05 |
 | QAT 的 fake quant 圖（freeze 後）與 convert 圖輸出要一致 | M06-3 |
@@ -98,6 +98,7 @@ M08 的實測差異多半只有 1 個輸出 LSB，對 fp32 的 SQNR 幾乎一樣
 | 精度除錯 | 逐層 SQNR 找候選，再用排除實驗確認 | M05-3、M05-4 |
 | QAT | PTQ 不夠時才做；評估前 BN 切 eval、關 observer | M06 |
 | 特殊結構 | weight_norm 這類由別的參數算出的 weight，折 BN 前換成常數 | M05-5、M06-6 |
+| 確認量化覆蓋 | 標籤與 Q/DQ node 都自己畫出來看，確認想量化的 op 都有；quantizer 漏標不會報錯 | M03-2、M08-1 |
 | 確認 Q/DQ 圖的精度 | 交付前最後一個數字，也是後端的比較基準 | M05、M06 |
 
 ### 交付給後端部署人員什麼
