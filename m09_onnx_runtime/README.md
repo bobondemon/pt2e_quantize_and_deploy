@@ -10,8 +10,7 @@ ORT 改寫出來的圖和平台有關（x86 與 arm 不同）。notebook 裡存�
 | [00_overview.ipynb](00_overview.ipynb) | 概覽：conv + relu 用原始 API 走完 PT2E → QDQ ONNX → ORT；五個圖最佳化等級在 ORT 1.30 原始碼裡各做什麼；QDQ node fusion 的三組；與平台有關的改寫；和 M08 的對照；CPU 與 VPU／NPU 的差別 |
 | [01_onnx_qdq_export.ipynb](01_onnx_qdq_export.ipynb) | M09-1：Q/DQ 圖匯出成 QDQ ONNX，每個 op 變成什麼；檔案裡存了什麼；動態 batch 要再講一次 |
 | [02_ort_qdq_fusion.ipynb](02_ort_qdq_fusion.ipynb) | M09-2：TinyConvNet 在五個等級各被改成什麼；int32 bias；Relu 為什麼消失；`ReduceMean` 留在 fp32 |
-| [03_qdq_fusion_coverage.ipynb](03_qdq_fusion_coverage.ipynb) | M09-3（選讀）：多種 op 的 OpZooNet，對照原始碼的 QDQ fusion 清單 |
-| [04_ort_quant_compare.ipynb](04_ort_quant_compare.ipynb) | M09-4：ORT 的 `quantize_static` vs PT2E；QDQ format 與 QOperator format |
+| [03_ort_quant_compare.ipynb](03_ort_quant_compare.ipynb) | M09-3：ORT 的 `quantize_static` vs PT2E；QDQ format 與 QOperator format |
 
 ## 在自己的電腦上執行
 

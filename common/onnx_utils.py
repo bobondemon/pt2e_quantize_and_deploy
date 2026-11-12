@@ -53,7 +53,7 @@ def to_onnx(gm, example_inputs, dynamic_batch=True, optimize=True) -> onnx.Model
 
     torch.onnx.export(dynamo=True) 會重新 torch.export 一次，GraphModule 上原本的動態 batch 不會帶過來，
     所以要用 dynamic_shapes 再講一次（M09-1 C 段）。
-    optimize=False 關掉 torch.onnx 自己的圖最佳化（例如先把 BN 折進 Conv），M09-3 用來看 ORT 自己折 BN。
+    optimize=False 關掉 torch.onnx 自己的圖最佳化（例如合併相同的 dq、先把 BN 折進 Conv），M09-1 用來數合併前的 dq。
     """
     dynamic_shapes = tuple({0: Dim("batch")} for _ in example_inputs) if dynamic_batch else None
     prog = torch.onnx.export(gm, example_inputs, dynamo=True, verbose=False, dynamic_shapes=dynamic_shapes,
@@ -116,7 +116,7 @@ def ort_quantize(fp32_onnx, **kwargs):
 
     * 工具只能寫檔，所以輸出經過暫存檔。
     * 工具會改動傳進去的 ModelProto（把 weight 改成指向暫存檔的 external data），所以每次傳一份拷貝。
-    * 工具的警告走 Python 的 root logger；先收起來，由呼叫端決定要不要印（M09-4 C 段）。
+    * 工具的警告走 Python 的 root logger；先收起來，由呼叫端決定要不要印（M09-3 C 段）。
     """
     handler, root = _Collect(), logging.getLogger()
     only_ours: list[logging.Handler] = [handler]

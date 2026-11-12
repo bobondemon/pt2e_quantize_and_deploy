@@ -118,9 +118,9 @@ MODELS["cat_pool"] = CatPoolNet
 
 
 class OpZooNet(nn.Module):
-    """一個模型塞進多種 op（M09-3）：看 ORT 的 QDQ node fusion 對每種 op 各做什麼。
+    """一個模型塞進多種 op（M10-3）：看清單外的 op 怎麼把圖切段。
 
-    TinyConvNet 只有 conv／relu／maxpool／add／mean／linear，看不出 fusion 涵蓋的範圍；
+    TinyConvNet 只有 conv／relu／maxpool／add／mean／linear，幾乎都在後端的 op 清單上；
     這裡再加 sigmoid、leaky_relu、cat、mul、avg_pool、matmul、softmax。不用訓練，只看圖。
     """
 

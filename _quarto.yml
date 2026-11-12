@@ -114,8 +114,7 @@ website:
           - m09_onnx_runtime/00_overview.ipynb
           - m09_onnx_runtime/01_onnx_qdq_export.ipynb
           - m09_onnx_runtime/02_ort_qdq_fusion.ipynb
-          - m09_onnx_runtime/03_qdq_fusion_coverage.ipynb
-          - m09_onnx_runtime/04_ort_quant_compare.ipynb
+          - m09_onnx_runtime/03_ort_quant_compare.ipynb
       - section: "M10 自訂後端"
         contents:
           - m10_custom_backend/00_overview.ipynb

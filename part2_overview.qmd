@@ -55,7 +55,7 @@ flowchart LR
 | 和 Q/DQ 圖的輸出 | 不保證逐位元相同，誤差同量級 | 同左 |
 
 兩章各有一個旁支：M08-1 說明兩份同名的 `XNNPACKQuantizer`（匯出 `.pte` 用 executorch 版）；
-M09-4 比較 ORT 自己的 `quantize_static`，以及 QDQ format 與 QOperator format（誰決定換成 int8 op）。
+M09-3 比較 ORT 自己的 `quantize_static`，以及 QDQ format 與 QOperator format（誰決定換成 int8 op）。
 
 ### 站到後端那一側（M10）
 
@@ -78,7 +78,7 @@ M08、M09 的後端很寬鬆；NPU、VPU 類的硬體通常窄得多。M10 虛�
 
 | 檢查 | 怎麼做 | 出處 |
 |---|---|---|
-| 哪些 op 沒變成 int8 | 量化前看標籤；部署前看 delegation 表、fusion 清單或 fallback 報告 | M08-3、M09-3、M10-3 |
+| 哪些 op 沒變成 int8 | 量化前看標籤；部署前看 delegation 表、fusion 清單或 fallback 報告 | M08-3、M09 概覽、M10-3 |
 | 數值對不對 | 先知道 fp32 底線，只比最後輸出 | M07-1 |
 | 有沒有變快 | 基準是同一個 runtime 的 fp32，不是 PyTorch eager | M08-4 |
 | 圖合不合硬體規格 | 寫一個只讀 Q/DQ 圖的檢查 pass | M10-2 |
@@ -103,7 +103,7 @@ M08、M09 的後端很寬鬆；NPU、VPU 類的硬體通常窄得多。M10 虛�
 | 交付物 | 內容 | 相關章節 |
 |---|---|---|
 | Quantizer | 照目標 kernel 設計的標籤規則，含 PTQ 與 QAT 設定 | M07 概覽、M10-1 |
-| op 清單 | 哪些 op 有 int8 kernel；清單外的 op 會把圖切段 | M09-3、M10-3 |
+| op 清單 | 哪些 op 有 int8 kernel；清單外的 op 會把圖切段 | M09 概覽、M10-3 |
 | 硬體限制 | static shape、位元數、scale 的形式（例如 2 的冪次） | M10-1 |
 | QAT 設定的驗證 | 確認 fake quant 圖與 convert 圖輸出一致 | M06-3 |
 | 匯出要求 | 例如 OpenVINO 要 `convert_pt2e(..., fold_quantize=False)` | M07 概覽 |
