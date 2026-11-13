@@ -22,7 +22,7 @@ def qualified_name(target):
 
 
 def short(target):
-    """Print node.target as a short name, e.g. aten.conv2d.default -> conv2d。"""
+    """Print node.target as a short name, e.g. aten.conv2d.default -> conv2d."""
     if isinstance(target, str):
         return target
     name = qualified_name(target)

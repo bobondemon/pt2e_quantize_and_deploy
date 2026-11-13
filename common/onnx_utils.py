@@ -131,7 +131,7 @@ def ort_quantize(fp32_onnx, **kwargs):
 
 
 def op_name(node) -> str:
-    """Op name of an ONNX node; non-standard domains are prefixed with the domain, e.g. com.microsoft.QGemm。"""
+    """Op name of an ONNX node; non-standard domains are prefixed with the domain, e.g. com.microsoft.QGemm."""
     return f"{node.domain}.{node.op_type}" if node.domain not in ("", "ai.onnx") else node.op_type
 
 

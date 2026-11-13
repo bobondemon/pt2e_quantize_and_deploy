@@ -1,11 +1,11 @@
-"""本專案共用的小模型。故意做得小又有代表性，方便在 graph 上肉眼追蹤每個 node。"""
+"""Small models shared across this project. Deliberately small yet representative, so every node is easy to trace by eye on the graph."""
 
 import torch
 import torch.nn as nn
 
 
 class ConvReLU(nn.Module):
-    """最單純的 conv + relu，沒有 BN。用來看最基本的 observer 落點。"""
+    """The simplest conv + relu, with no BN. Used to see the most basic observer placement."""
 
     def __init__(self, cin=3, cout=8):
         super().__init__()
@@ -17,7 +17,7 @@ class ConvReLU(nn.Module):
 
 
 class ConvBnReLU(nn.Module):
-    """conv + bn + relu，M04 fusion 的主角。"""
+    """conv + bn + relu, the star of M04 fusion."""
 
     def __init__(self, cin=3, cout=8, bias=False):
         super().__init__()
@@ -30,9 +30,9 @@ class ConvBnReLU(nn.Module):
 
 
 class ResidualBlock(nn.Module):
-    """帶 skip connection 的區塊。add 的兩個輸入需要共用 qparams -> M03 SharedQuantizationSpec。
+    """A block with a skip connection. The two inputs of add must share qparams -> M03 SharedQuantizationSpec.
 
-    預設 ch=3 是為了能直接吃 common.models.example_inputs() 單獨測試。
+    The default ch=3 lets it take common.models.example_inputs() directly for standalone tests.
     """
 
     def __init__(self, ch=3):
@@ -50,9 +50,9 @@ class ResidualBlock(nn.Module):
 
 
 class TinyConvNet(nn.Module):
-    """能真的訓練起來的小分類網路，給 M05 / M06 用。
+    """A small classifier that can actually be trained, for M05 / M06.
 
-    輸入 (N, 3, 16, 16)，輸出 num_classes 個 logits。
+    Input (N, 3, 16, 16); output num_classes logits.
     """
 
     def __init__(self, num_classes=4, width=16):
@@ -74,7 +74,7 @@ class TinyConvNet(nn.Module):
 
 
 def example_inputs(batch_size=2, size=16):
-    """所有模組共用的 example input（torch.export 需要）。"""
+    """The example input shared by all modules (needed by torch.export)."""
     return (torch.randn(batch_size, 3, size, size),)
 
 
@@ -93,10 +93,10 @@ def get_model(name="conv_bn_relu", **kwargs):
 
 
 class CatPoolNet(nn.Module):
-    """含 cat / maxpool / add 的小網路。
+    """A small network with cat / maxpool / add.
 
-    用來觀察哪些 op 會被強制「共用 qparams」(SharedQuantizationSpec)，
-    哪些 op 的每個輸入各自量化。
+    Used to observe which ops are forced to share qparams (SharedQuantizationSpec)
+    and which ops quantize each of their inputs separately.
     """
 
     def __init__(self, ch=8):
@@ -108,20 +108,20 @@ class CatPoolNet(nn.Module):
 
     def forward(self, x):
         ya, yb = torch.relu(self.a(x)), torch.relu(self.b(x))
-        z = torch.cat([ya, yb], dim=1)   # cat：所有輸入與輸出共用 qparams
-        z = self.pool(z)                 # maxpool：輸入輸出共用 qparams
+        z = torch.cat([ya, yb], dim=1)   # cat: all inputs and the output share qparams
+        z = self.pool(z)                 # maxpool: input and output share qparams
         z = self.out(z)
-        return z + z.mean()              # add：兩個輸入各自量化
+        return z + z.mean()              # add: the two inputs are quantized separately
 
 
 MODELS["cat_pool"] = CatPoolNet
 
 
 class OpZooNet(nn.Module):
-    """一個模型塞進多種 op（M10-3）：看清單外的 op 怎麼把圖切段。
+    """One model packed with many kinds of ops (M10-3): see how ops outside the list split the graph into segments.
 
-    TinyConvNet 只有 conv／relu／maxpool／add／mean／linear，幾乎都在後端的 op 清單上；
-    這裡再加 sigmoid、leaky_relu、cat、mul、avg_pool、matmul、softmax。不用訓練，只看圖。
+    TinyConvNet only has conv / relu / maxpool / add / mean / linear, almost all on the backend's op list;
+    this adds sigmoid, leaky_relu, cat, mul, avg_pool, matmul, softmax. No training needed; only the graph matters.
     """
 
     def __init__(self, ch=8, num_classes=10):
@@ -135,10 +135,10 @@ class OpZooNet(nn.Module):
     def forward(self, x):
         a = torch.sigmoid(self.bn_a(self.conv_a(x)))               # Conv → BN → Sigmoid
         b = nn.functional.leaky_relu(self.conv_b(x))               # Conv → LeakyRelu
-        z = torch.cat([a, b], dim=1) * 0.5                         # Concat、Mul
-        z = nn.functional.avg_pool2d(nn.functional.max_pool2d(z, 2), 2)  # MaxPool、AveragePool
-        z = z.mean(dim=(2, 3)) @ self.proj                         # ReduceMean、MatMul
-        return torch.softmax(self.fc(z), dim=-1)                   # Gemm、Softmax
+        z = torch.cat([a, b], dim=1) * 0.5                         # Concat, Mul
+        z = nn.functional.avg_pool2d(nn.functional.max_pool2d(z, 2), 2)  # MaxPool, AveragePool
+        z = z.mean(dim=(2, 3)) @ self.proj                         # ReduceMean, MatMul
+        return torch.softmax(self.fc(z), dim=-1)                   # Gemm, Softmax
 
 
 MODELS["op_zoo"] = OpZooNet
