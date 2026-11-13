@@ -1,9 +1,9 @@
-"""M08 共用：把 GraphModule 交給 ExecuTorch 的 XNNPACK 後端、產生 .pte，再用 ExecuTorch runtime 執行。
+"""Shared by M08: hand a GraphModule to ExecuTorch's XNNPACK backend, produce a .pte, then run it with the ExecuTorch runtime.
 
-需要 `uv sync --group executorch`；只有 M08 會 import 這個檔案。
+Requires `uv sync --group executorch`; only M08 imports this file.
 """
 
-import common.pt2e  # noqa: F401  # 必須先於 executorch（它會 import torchao）：先壓掉 import 期間的雜訊 log
+import common.pt2e  # noqa: F401  # Must come before executorch (which imports torchao): silences noisy logs during import first
 
 import torch
 import executorch.backends.xnnpack.xnnpack_preprocess as _xnn_preprocess  # pyright: ignore[reportMissingImports]
@@ -20,10 +20,10 @@ __all__ = ["delegation_summary", "get_delegation_info", "lower_to_xnnpack", "Pte
 
 
 def xnnpack_ptq(model, example_inputs, n_calib=128):
-    """M08 的 PTQ：static shape export → executorch 版 XNNPACKQuantizer → 校準 → convert，回傳 Q/DQ 圖。
+    """M08's PTQ: static-shape export → executorch's XNNPACKQuantizer → calibration → convert; returns the Q/DQ graph.
 
-    edge 後端要 static shape，所以 export 時關掉動態 batch（M00 的伏筆）；圖只吃 example_inputs 的 batch 大小，
-    校準資料要切成同樣大小再餵。
+    Edge backends need static shapes, so dynamic batch is turned off at export (set up in M00); the graph only accepts the batch size
+    of example_inputs, so calibration data must be split to the same size before feeding it.
     """
     gm = export_module(model, example_inputs, dynamic_batch=False)
     quantizer, _ = get_xnnpack_quantizer("executorch", is_per_channel=True)
@@ -37,12 +37,12 @@ def xnnpack_ptq(model, example_inputs, n_calib=128):
 
 
 def lower_to_xnnpack(gm, example_inputs):
-    """GraphModule（fp32 或 convert 後的 Q/DQ 圖）→ (edge program manager, .pte 的 bytes)。
+    """GraphModule (fp32 or the Q/DQ graph after convert) → (edge program manager, bytes of the .pte).
 
-    三步：
-      torch.export.export          : 重新 export 成 ExportedProgram（shape 依 example_inputs 寫死）
-      to_edge_transform_and_lower  : 轉成 Edge dialect，XnnpackPartitioner 把它吃得下的子圖切出來、交給 XNNPACK 編譯
-      to_executorch                : 剩下的圖做 memory planning，序列化成 .pte
+    Three steps:
+      torch.export.export          : re-export as an ExportedProgram (shapes fixed by example_inputs)
+      to_edge_transform_and_lower  : convert to the Edge dialect; XnnpackPartitioner cuts out the subgraphs it can handle and hands them to XNNPACK to compile
+      to_executorch                : do memory planning on the remaining graph and serialize it to a .pte
     """
     ep = torch.export.export(gm, example_inputs)
     edge = to_edge_transform_and_lower(ep, partitioner=[XnnpackPartitioner()])
@@ -50,9 +50,9 @@ def lower_to_xnnpack(gm, example_inputs):
 
 
 def delegation_summary(edge):
-    """回傳 (delegate 個數, 交給 XNNPACK 的 node 數, 留在 ExecuTorch 的 node 數, {op: (交給 XNNPACK, 留下)})。
+    """Return (number of delegates, nodes handed to XNNPACK, nodes left in ExecuTorch, {op: (handed to XNNPACK, left behind)}).
 
-    op 名稱是 Edge dialect 的寫法，例如 aten_convolution_default（conv2d 在 Edge 已 decompose 成 convolution）。
+    Op names use the Edge dialect spelling, e.g. aten_convolution_default (conv2d is already decomposed into convolution in Edge).
     """
     info = get_delegation_info(edge.exported_program().graph_module)
     by_op = {k: (v.delegated, v.non_delegated) for k, v in info.delegation_by_operator.items()}
@@ -60,14 +60,14 @@ def delegation_summary(edge):
 
 
 def xnnpack_nodes(gm, example_inputs):
-    """再 lower 一次，回傳每個 delegate 裡 XNNPACK 的 node：[[(node, 輸入 dtype, 輸出 dtype, 輸出 clamp), ...], ...]。
+    """Lower once more and return the XNNPACK nodes in each delegate: [[(node, input dtype, output dtype, output clamp), ...], ...].
 
-    XNNPACK backend 在 lowering 時把 delegate 的子圖重建成自己的圖（XNNGraph），再序列化進 .pte；
-    這裡在序列化之前把那張圖攔下來。dtype 是 XNNPACK 的寫法：qint8（per-tensor int8）、qcint8／qcint32
-    （per-channel 的 int8 weight／int32 bias）、fp32。clamp 是融合進 node 的輸出範圍（例如 relu → [0, +inf]）。
+    During lowering the XNNPACK backend rebuilds each delegate's subgraph as its own graph (XNNGraph) and then serializes it into the .pte;
+    here that graph is intercepted just before serialization. dtype uses XNNPACK's spelling: qint8 (per-tensor int8), qcint8 / qcint32
+    (per-channel int8 weight / int32 bias), fp32. clamp is the output range fused into the node (e.g. relu → [0, +inf]).
 
-    注意：依賴 executorch 1.5.0 的內部結構（`xnnpack_preprocess.serialize_xnnpack_binary` 與 XNNGraph 的欄位），
-    不是公開 API，換版本可能要改。
+    Note: this depends on executorch 1.5.0 internals (`xnnpack_preprocess.serialize_xnnpack_binary` and the XNNGraph fields),
+    which are not public API and may need changes on other versions.
     """
     graphs = []
     original = _xnn_preprocess.serialize_xnnpack_binary
@@ -87,7 +87,7 @@ def xnnpack_nodes(gm, example_inputs):
 def _xnn_rows(xnn_graph):
     dtype = {}
     for v in xnn_graph.xvalues:
-        tensor = getattr(v.xvalue_union, "tensor_value", v.xvalue_union)  # 量化的 tensor 多包一層
+        tensor = getattr(v.xvalue_union, "tensor_value", v.xvalue_union)  # quantized tensors are wrapped one level deeper
         dtype[tensor.id_out] = tensor.datatype.name.removeprefix("xnn_datatype_")
     rows = []
     for node in xnn_graph.xnodes:
@@ -100,22 +100,22 @@ def _xnn_rows(xnn_graph):
 
 
 class PteRunner:
-    """載入 .pte、執行 forward。
+    """Load a .pte and run forward.
 
-    注意：`Runtime.load_program()` 回傳的 Program 必須一直留著參照。只留 `load_method()` 的 Method、
-    讓 Program 被回收的話，Method 執行時會讀到已釋放的記憶體（本專案試作時出現莫名的 resize 錯誤）。
+    Note: keep a reference to the Program returned by `Runtime.load_program()` for as long as the runner lives. If only the Method from `load_method()`
+    is kept and the Program gets garbage-collected, the Method reads freed memory when it runs (this project hit a puzzling resize error while prototyping).
     """
 
     def __init__(self, pte):
-        """pte：.pte 的 bytes，或 .pte 檔案路徑。
+        """pte: the bytes of a .pte, or the path to a .pte file.
 
-        第一次載入 XNNPACK delegate 時，ExecuTorch 的 C++ 層會在 stderr 印幾行 `[cpuinfo_utils.cpp:…]`
-        （偵測 CPU 核心），與結果無關，這裡收起來。
+        The first time the XNNPACK delegate is loaded, ExecuTorch's C++ layer prints a few `[cpuinfo_utils.cpp:…]` lines to stderr
+        (CPU core detection); they are unrelated to the result, so they are swallowed here.
         """
         with capture_stderr():
             self.program = Runtime.get().load_program(pte)
             method = self.program.load_method("forward")
-        assert method is not None, ".pte 裡沒有 forward method"
+        assert method is not None, "no forward method in the .pte"
         self.method = method
 
     def __call__(self, *inputs):

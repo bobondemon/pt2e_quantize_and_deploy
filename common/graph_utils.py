@@ -1,19 +1,19 @@
-"""看圖的工具。PT2E 學習過程 90% 的時間都在盯著 graph 看，所以先把工具做順手。"""
+"""Tools for reading graphs. About 90% of learning PT2E is spent staring at the graph, so these tools come first."""
 
 from collections import Counter
 
 import torch
 from tabulate import tabulate
 
-# convert_pt2e 產生的 q/dq op 都在這個 namespace 底下
+# The q/dq ops produced by convert_pt2e all live under this namespace
 QDQ_PREFIXES = ("quantized_decomposed.quantize", "quantized_decomposed.dequantize")
 
 
 def qualified_name(target):
-    """node.target 的完整名稱，例如 aten.conv2d.default。
+    """Full name of node.target, e.g. aten.conv2d.default.
 
-    executorch 的 Edge dialect op（EdgeOpOverload，M08）的 str() 是 `<EdgeOpOverload: aten.relu.default>: schema = …`，
-    名稱要從 __name__ 取。
+    The str() of an executorch Edge dialect op (EdgeOpOverload, M08) is `<EdgeOpOverload: aten.relu.default>: schema = …`,
+    so the name has to be taken from __name__.
     """
     name = str(target)
     if name.startswith("<EdgeOpOverload"):
@@ -22,7 +22,7 @@ def qualified_name(target):
 
 
 def short(target):
-    """把 node.target 印成短名字，例如 aten.conv2d.default -> conv2d。"""
+    """Print node.target as a short name, e.g. aten.conv2d.default -> conv2d。"""
     if isinstance(target, str):
         return target
     name = qualified_name(target)
@@ -70,7 +70,7 @@ def print_graph(gm, title=None, show_args=True):
 
 
 def _node_label(gm, n, show_literals=False):
-    """graph_tree 用的單行描述：op 名稱 + 內嵌的 get_attr（‹…›）+（可選）非 node 的常數參數。"""
+    """One-line description used by graph_tree: op name + inlined get_attr (‹…›) + (optionally) non-node constant arguments."""
     if n.op in ("placeholder", "get_attr"):
         return str(n.target)
     if n.op == "call_module":
@@ -89,18 +89,18 @@ def _node_label(gm, n, show_literals=False):
 
 
 def graph_tree(gm, notes=None, names=None, show_literals=False):
-    """把圖畫成『從 output 往回展開的資料流樹』，比逐 node 的表格容易看出結構。
+    """Draw the graph as a dataflow tree expanded backwards from the output; the structure is easier to see than in a node-by-node table.
 
-    * 只畫 output 真正依賴的 node（`_guards_fn`、BN 的 num_batches_tracked 更新這類旁支自然不見）。
-    * get_attr 內嵌在使用它的 node 後面，用 ‹…› 包起來，不另佔一個 row。
-    * 被多個 node 使用的中間結果（分叉）先在最上面用 `[名字]` 宣告一次，樹裡以 `[名字]` 引用。
-    * notes: {node.name: 說明}，附在該行尾端；names: {node.name: 別名}，用在分叉的 `[名字]`。
-    * show_literals: 是否顯示 stride、eps 這類非 node 的常數參數（預設不顯示，避免淹沒結構）。
+    * Only nodes the output actually depends on are drawn (side branches such as `_guards_fn` and BN's num_batches_tracked update naturally disappear).
+    * get_attr is inlined after the node that uses it, wrapped in ‹…›, and does not take a row of its own.
+    * Intermediate results used by several nodes (forks) are declared once at the top as `[name]` and referenced as `[name]` inside the tree.
+    * notes: {node.name: text}, appended at the end of that line; names: {node.name: alias}, used for the `[name]` of forks.
+    * show_literals: whether to show non-node constant arguments such as stride and eps (off by default so they do not drown the structure).
     """
     notes, names = notes or {}, names or {}
     out = next(n for n in gm.graph.nodes if n.op == "output")
 
-    def inputs(n):  # 不含 get_attr（它內嵌在 label 裡）
+    def inputs(n):  # excludes get_attr (it is inlined in the label)
         return [a for a in n.all_input_nodes if a.op != "get_attr"]
 
     users, seen = Counter(), set()
@@ -142,7 +142,7 @@ def graph_tree(gm, notes=None, names=None, show_literals=False):
 
 
 def op_counts(gm):
-    """統計圖上各種 op 出現次數（call_module 用模組類別名）。"""
+    """Count how often each op appears in the graph (call_module uses the module class name)."""
     c = Counter()
     for n in gm.graph.nodes:
         if n.op == "call_function":
@@ -150,14 +150,14 @@ def op_counts(gm):
         elif n.op == "call_module":
             mod = gm.get_submodule(n.target)
             tname = type(mod).__name__
-            if tname == "GuardsFn":  # torch.export 自動插入的 shape guard，與量化無關
+            if tname == "GuardsFn":  # shape guard inserted automatically by torch.export; unrelated to quantization
                 continue
             c[f"<module:{tname}>"] += 1
     return c
 
 
 def diff_ops(before, after, label_before="before", label_after="after", tablefmt="simple"):
-    """回傳可讀的 op 增減表，用來回答『prepare 到底做了什麼』。"""
+    """Return a readable table of op additions and removals, to answer what exactly prepare did."""
     cb, ca = op_counts(before), op_counts(after)
     keys = sorted(set(cb) | set(ca))
     rows = [[k, cb.get(k, 0), ca.get(k, 0), ca.get(k, 0) - cb.get(k, 0)] for k in keys]
@@ -166,9 +166,9 @@ def diff_ops(before, after, label_before="before", label_after="after", tablefmt
 
 
 def observer_nodes(gm):
-    """prepare_pt2e 之後，圖上插入的 observer / fake-quant（都是 call_module）。
+    """The observers / fake-quants inserted into the graph after prepare_pt2e (all call_module).
 
-    回傳 [(node, module), ...]
+    Returns [(node, module), ...]
     """
     out = []
     for n in gm.graph.nodes:
@@ -181,7 +181,7 @@ def observer_nodes(gm):
 
 
 def qdq_nodes(gm):
-    """convert_pt2e 之後圖上的 quantize / dequantize node。"""
+    """The quantize / dequantize nodes in the graph after convert_pt2e."""
     return [
         n
         for n in gm.graph.nodes
@@ -190,7 +190,7 @@ def qdq_nodes(gm):
 
 
 def observer_placement_table(gm, tablefmt="simple"):
-    """把每個 observer 對應到『它掛在哪條邊上』：producer -> observer -> consumers。"""
+    """Map each observer to the edge it sits on: producer -> observer -> consumers."""
     rows = []
     for n, mod in observer_nodes(gm):
         producer = n.args[0].name if n.args and isinstance(n.args[0], torch.fx.Node) else "-"
@@ -206,13 +206,13 @@ def observer_placement_table(gm, tablefmt="simple"):
         rows.append([n.name, type(mod).__name__, producer, consumers, qparams])
     return tabulate(
         rows,
-        headers=["observer", "type", "輸入來自", "輸出給", "qparams"],
+        headers=["observer", "type", "input from", "output to", "qparams"],
         tablefmt=tablefmt,
     )
 
 
 def sqnr(ref: torch.Tensor, test: torch.Tensor) -> float:
-    """Signal-to-Quantization-Noise Ratio (dB)。越大越好，> 30dB 通常沒問題。"""
+    """Signal-to-Quantization-Noise Ratio (dB). Higher is better; above 30 dB is usually fine."""
     ref, test = ref.detach().float(), test.detach().float()
     noise = ref - test
     p_ref = ref.pow(2).mean()
@@ -224,7 +224,7 @@ def sqnr(ref: torch.Tensor, test: torch.Tensor) -> float:
 
 @torch.no_grad()
 def compare(model_a, model_b, inputs, name_a="fp32", name_b="quant"):
-    """跑同一份 input，比較兩個模型輸出的 SQNR / 最大絕對誤差。"""
+    """Run the same input and compare the two models' outputs by SQNR / max absolute error."""
     ya, yb = model_a(*inputs), model_b(*inputs)
     return {
         "sqnr_db": sqnr(ya, yb),
@@ -234,10 +234,10 @@ def compare(model_a, model_b, inputs, name_a="fp32", name_b="quant"):
 
 
 def annotation_table(gm, tablefmt="simple"):
-    """列出圖上每個 node 的 QuantizationAnnotation（quantizer.annotate() 之後才有東西）。
+    """List the QuantizationAnnotation of every node in the graph (only populated after quantizer.annotate()).
 
-    這是回答「這個 quantizer 到底管了哪些 op」最直接的方法——
-    不要相信文章，自己 dump 出來看。
+    This is the most direct way to answer "which ops does this quantizer actually cover?" --
+    don't trust articles; dump it and look for yourself.
     """
     rows = []
     for n in gm.graph.nodes:
@@ -255,7 +255,7 @@ def annotation_table(gm, tablefmt="simple"):
 
 
 def unannotated_ops(gm):
-    """圖上沒有被 quantizer 標註到的 call_function node（會留在 fp32）。"""
+    """The call_function nodes in the graph that the quantizer did not annotate (they stay in fp32)."""
     return [
         n
         for n in gm.graph.nodes
@@ -264,20 +264,20 @@ def unannotated_ops(gm):
 
 
 def qspec_summary(spec):
-    """把一份 qspec 印成一行：dtype、qscheme、整數範圍、observer、ch_axis。"""
+    """Print a qspec as one line: dtype, qscheme, integer range, observer, ch_axis."""
     if spec is None:
-        return "None（不量化）"
+        return "None (not quantized)"
     name = type(spec).__name__
     if name == "SharedQuantizationSpec":
         edge = spec.edge_or_node
         label = f"{edge[0].name} -> {edge[1].name}" if isinstance(edge, tuple) else f"{edge.name} (output)"
-        return f"Shared（與 {label} 共用）"
+        return f"Shared (shared with {label})"
     if name == "DerivedQuantizationSpec":
-        return f"Derived（由 {len(spec.derived_from)} 個位置推導，{str(spec.dtype).split('.')[-1]}）"
+        return f"Derived (derived from {len(spec.derived_from)} locations, {str(spec.dtype).split('.')[-1]})"
     if name == "FixedQParamsQuantizationSpec":
-        return f"FixedQParams（scale={spec.scale:g}, zp={spec.zero_point}）"
+        return f"FixedQParams (scale={spec.scale:g}, zp={spec.zero_point})"
     ctr = spec.observer_or_fake_quant_ctr
-    ctr = getattr(getattr(ctr, "p", None), "func", ctr)  # with_args 包過的話，剝開
+    ctr = getattr(getattr(ctr, "p", None), "func", ctr)  # unwrap if it was wrapped by with_args
     scheme = str(spec.qscheme).split(".")[-1].replace("per_", "per-").replace("_", " ")
     axis = f", ch_axis={spec.ch_axis}" if spec.ch_axis is not None else ""
     return f"{str(spec.dtype).split('.')[-1]} {scheme} [{spec.quant_min},{spec.quant_max}]\n{ctr.__name__}{axis}"

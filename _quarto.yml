@@ -29,12 +29,22 @@ language: _language-zh-TW.yml
 website:
   title: "PT2E 端到端：邊緣裝置的量化、後端部署與分工"
   page-navigation: true
+  navbar:
+    background: primary
+    right:
+      - text: "🌐 English"       # href 由 lang-switch.html 的 JS 換成「同一頁的英文版」
+        href: en/index.html
+        css-class: lang-switch
   repo-url: https://github.com/bobondemon/pt2e_quantize_and_deploy
   repo-actions: [source, issue]   # 每頁的「檢視原始檔」「回報問題」連結
   sidebar:
     style: docked
     search: true
     tools:
+      - icon: translate
+        text: English
+        href: en/index.html
+        css-class: lang-switch
       - icon: github
         href: https://github.com/bobondemon/pt2e_quantize_and_deploy
         aria-label: GitHub
@@ -132,3 +142,4 @@ format:
     toc-depth: 2
     code-overflow: wrap
     highlight-style: github
+    include-in-header: assets/lang-switch.html

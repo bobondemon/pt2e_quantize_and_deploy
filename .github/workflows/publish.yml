@@ -28,7 +28,11 @@ jobs:
         with:
           version: 1.11.9   # 和 pyproject.toml 的 site 群組（quarto-cli）同一版
 
-      - run: quarto render
+      - run: quarto render        # 中文版 → _site/
+
+      - run: |                    # 英文版 → en/_site/，搬進 _site/en/
+          quarto render en
+          mv en/_site _site/en
 
       - uses: actions/configure-pages@v5
 

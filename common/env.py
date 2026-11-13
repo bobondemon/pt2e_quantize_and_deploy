@@ -1,4 +1,4 @@
-"""執行環境的一行摘要，以及安靜的 CPU profiler。數值會隨平台與 kernel 不同的教材（M07 起）在開頭印出環境。"""
+"""One-line summary of the runtime environment, plus a quiet CPU profiler. Chapters whose numbers vary with platform and kernel (M07 on) print the environment at the top."""
 
 import contextlib
 import io
@@ -13,19 +13,20 @@ from torch.profiler import ProfilerActivity, profile
 
 
 def env_summary() -> str:
-    """作業系統／CPU 架構、torch 版本、執行緒數，以及 CPU 上兩個會影響 conv 實作的後端是否可用。"""
-    return (f"{platform.system()} {platform.machine()}｜torch {torch.__version__}｜threads={torch.get_num_threads()}"
-            f"｜mkldnn={torch.backends.mkldnn.is_available()}｜nnpack={torch.backends.nnpack.is_available()}")
+    """OS / CPU architecture, torch version, thread count, and whether the two CPU backends that affect the conv implementation are available."""
+    return (f"{platform.system()} {platform.machine()} | torch {torch.__version__} | threads={torch.get_num_threads()}"
+            f" | mkldnn={torch.backends.mkldnn.is_available()} | nnpack={torch.backends.nnpack.is_available()}")
 
 
 @contextlib.contextmanager
 def capture_stderr():
-    """期間收下所有寫到 stderr 的內容；離開 `with` 後，`.text` 是收到的文字。
+    """Capture everything written to stderr inside the block; after leaving the `with`, `.text` holds the captured text.
 
-    ExecuTorch runtime 的 C++ log（例如 `[cpuinfo_utils.cpp:…]`、`[tensor_impl.cpp:…]`）在 notebook 裡會變成
-    stderr 輸出。它的 Python binding 在 Jupyter 裡經由 `sys.stderr` 轉寫，在一般的 Python 程式裡則直接寫
-    file descriptor 2，所以兩條都要接：`sys.stderr` 換成字串緩衝，fd 2 導到暫存檔。
-    用法：`with capture_stderr() as log: ...`，之後讀 `log.text`。期間的 Python 警告也會被收下。
+    The ExecuTorch runtime's C++ log (e.g. `[cpuinfo_utils.cpp:…]`, `[tensor_impl.cpp:…]`) shows up as
+    stderr output in a notebook. Its Python binding writes through `sys.stderr` in Jupyter, but writes
+    straight to file descriptor 2 in a plain Python program, so both paths must be caught: `sys.stderr` is
+    swapped for a string buffer, and fd 2 is redirected to a temporary file.
+    Usage: `with capture_stderr() as log: ...`, then read `log.text`. Python warnings raised inside the block are captured too.
     """
     log = types.SimpleNamespace(text="")
     buf = io.StringIO()
@@ -45,10 +46,10 @@ def capture_stderr():
 
 @contextlib.contextmanager
 def cpu_profile():
-    """`torch.profiler.profile(activities=[CPU])`，但期間把 stderr（file descriptor 2）導到 /dev/null。
+    """`torch.profiler.profile(activities=[CPU])`, but with stderr (file descriptor 2) redirected to /dev/null inside the block.
 
-    Kineto 在 C 層對 stderr 印 `USDT: ... profiler_start/stop`，環境變數關不掉，在 notebook 裡會變成
-    stderr 輸出。用法和 profile 相同：`with cpu_profile() as prof: ...`，之後讀 `prof.events()`。
+    Kineto prints `USDT: ... profiler_start/stop` to stderr from the C layer, and no environment variable turns it off, so in a
+    notebook it appears as stderr output. Used like profile: `with cpu_profile() as prof: ...`, then read `prof.events()`.
     """
     sys.stderr.flush()
     saved, devnull = os.dup(2), os.open(os.devnull, os.O_WRONLY)

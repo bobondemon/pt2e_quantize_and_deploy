@@ -1,0 +1,141 @@
+---
+title: "End-to-End PT2E: Quantization, Backend Deployment, and Who Does What on Edge Devices"
+---
+
+A few words before we start
+
+> These days it feels like teaching material is mostly read by AI, and AI probably already knows all of this\
+> If AI helps with quantization and deployment, do humans — the bottleneck — still need to understand it? I don't know, but right now I want to write down what I've learned from experience\
+> Anyway, this course is written for humans, assuming anyone still wants to understand ...
+
+Use PyTorch 2 Export (PT2E) to quantize a model to int8 and other low-bit integers: start from the graph you get out of `torch.export`, see how the quantizer annotates it, how observers are inserted,
+what the graph looks like after convert, and finally hand it to a backend such as XNNPACK or ONNX Runtime.
+
+This course targets edge devices with limited compute and power (for example always-on sensing and voice wake-up): small models, a fully integer graph (mostly int8), fixed shapes, and a limited set of ops supported by the backend.
+Weight-only int4 and KV-cache quantization, as commonly used for LLMs, are out of scope.
+
+Each module starts with an **overview** that states the questions the chapter answers and its core concepts; the notebooks that follow verify them hands-on, one by one.
+All notebook outputs have already been run, so you can read the results directly; to change parameters and rerun yourself, see "Run on your own machine" below.
+
+## The storyline: two parts
+
+M00 is the common foundation: capture the model as a graph and learn to edit it. After that the course splits into two parts, divided by the **Q/DQ graph** produced by `convert_pt2e`:
+
+```{mermaid}
+flowchart TB
+    F["fp32 model"] --> P1["Part 1: M01–M06<br/>export → prepare<br/>→ calibrate or train → convert"]
+    P1 --> QDQ["Q/DQ graph<br/>fp32 ops simulating int8"]
+    QDQ --> P2["Part 2: M07–M10<br/>recognize dq → op → q<br/>swap in int8 kernels"]
+    P2 --> D["Runs on device<br/>.pte / .onnx / custom hardware"]
+    P2 -. "Quantizer, op list, constraints" .-> P1
+```
+
+| | Part 1 | Part 2 |
+|---|---|---|
+| Chapters | M01–M06 | M07–M10 |
+| Starting point | A trained fp32 model | The Q/DQ graph |
+| End point | The Q/DQ graph, and its accuracy | An int8 model running on the device |
+| Questions answered | Where to quantize, what the scales are, what to do with QAT when PTQ is not enough | Who swaps the units for int8 kernels, what to do when a swap is impossible, how to verify numerics and speed |
+| Overview | [Part 1 overview](part1_overview.qmd) | [Part 2 overview](part2_overview.qmd) |
+
+The reading order is Part 1 → Part 2, but the dashed line in the diagram points the other way: the Quantizer is designed around the backend's own kernels (M03),
+so in practice you **pick the backend first, then quantize** (the M07 overview, "Before Quantizing, Choose the Backend").
+M03 reads and writes a Quantizer from the user's point of view; M10 takes the backend's point of view and writes hardware constraints into a Quantizer.
+The Quantizer is the contract between the two parts.
+
+## Learning path
+
+| Module | Topic |
+|---|---|
+| [M00](m00_export_basics/00_overview.ipynb) | `torch.export` and editing the fx graph |
+| [Part 1 overview](part1_overview.qmd) | From an fp32 model to the Q/DQ graph: the storyline and the algorithm engineer's duties |
+| [M01](m01_hello_pt2e/00_overview.ipynb) | Your first quantization: four steps, the Q/DQ graph |
+| [M02](m02_observer_fakequant/00_overview.ipynb) | Observers and fake quant: inserting observers and doing convert by hand |
+| [M03](m03_quantizer_api/00_overview.ipynb) | Annotations and the Quantizer: who decides where observers go |
+| [M04](m04_conv_bn_folding/00_overview.ipynb) | Conv + BN folding: PTQ folds at prepare, QAT folds only at convert |
+| [M05](m05_ptq_pipeline/00_overview.ipynb) | Debugging PTQ accuracy: SQNR, calibration, per-layer diagnosis, mixed precision |
+| [M06](m06_qat_pipeline/00_overview.ipynb) | The QAT training flow: STE, the switches before evaluation, training graph = convert graph, QAT vs PTQ at int4 |
+| [Part 2 overview](part2_overview.qmd) | After the Q/DQ graph: the storyline and the backend deployment engineer's duties |
+| [M07](m07_representation_lowering/00_overview.ipynb) | Backend deployment overview: backend layers, three routes, why the Quantizer must match the backend; what the Q/DQ graph becomes through the reference representation, lowering, and Inductor; the fp32 numeric floor |
+| [M08](m08_xnnpack_executorch/00_overview.ipynb) | XNNPACK / ExecuTorch: Q/DQ graph → lowering → `.pte` → runtime; unsupported ops split the graph; the gain divides into switching runtime and quantization |
+| [M09](m09_onnx_runtime/00_overview.ipynb) | ONNX Runtime: exporting the Q/DQ graph to QDQ ONNX; five graph-optimization levels swap in int8 kernels when the session is created; the QDQ node fusion op list; ORT's own quantization tools |
+| [M10](m10_custom_backend/00_overview.ipynb) | A custom backend: writing the hardware constraints of a fictional VPU as a Quantizer; a check pass that only reads the Q/DQ graph; a partitioned graph that sends unsupported ops back to the CPU |
+
+### The shortest reading path
+
+If you are short on time, read these four first to get the whole picture, then dive into the chapters you need:
+
+1. This page: End-to-End PT2E: Quantization, Backend Deployment, and Who Does What on Edge Devices
+2. [M00 overview | Turning a Model into a Graph: torch.export, ATen, and fx](m00_export_basics/00_overview.ipynb)
+3. [Part 1 overview | From an fp32 Model to the Q/DQ Graph (M01–M06)](part1_overview.qmd)
+4. [Part 2 overview | After the Q/DQ Graph: Handing Off to the Backend (M07–M10)](part2_overview.qmd)
+
+## Two roles: the algorithm engineer and the backend deployment engineer
+
+In practice the two parts are often owned by two kinds of people. One person may play both roles, but what gets handed over is the same.
+
+| | Algorithm engineer | Backend deployment engineer |
+|---|---|---|
+| Responsible for | Modeling, training, quantization | Choosing the platform, providing the Quantizer, lowering, verification, and deployment |
+| Main chapters | Part 1 (M01–M06) | Part 2 (M07–M10) |
+| Hands to the other side | Q/DQ graph, fp32 model, data, accuracy report | Quantizer, op list, hardware constraints |
+| Owns which numbers | Q/DQ graph vs fp32 | Device output vs Q/DQ graph |
+
+### The order of collaboration
+
+```{mermaid}
+sequenceDiagram
+    participant A as Algorithm engineer
+    participant B as Backend deployment engineer
+    B->>A: Quantizer, op list, shape and bit-width constraints
+    A->>A: Design and train the fp32 model, avoiding ops outside the list
+    A->>A: PTQ or QAT, confirm accuracy on the Q/DQ graph
+    A->>B: Q/DQ graph, fp32 model, data, accuracy report
+    B->>B: Compliance check, lowering, fallback report
+    B->>B: Numerics and speed verification
+    B-->>A: Report ops that fell back, accuracy gap, speed
+    A->>B: Revised Q/DQ graph
+```
+
+The last two steps usually go back and forth several times. The details of each handoff checklist are in the "Role" section of each part overview.
+
+### Four things this division of labor must add
+
+| Easy to miss | Why | Where |
+|---|---|---|
+| Give the backend information before the model is designed | The op list determines how many segments the graph is split into; you can avoid that when choosing the architecture | M10-3 |
+| Handing over only the Q/DQ graph is not enough | The backend needs the fp32 model as a baseline and data to rerun evaluation; some routes also need to convert again | M07 overview, M08-2 |
+| QAT consistency is a joint responsibility | The QAT config from the backend must pass the "training graph = convert graph" check | M06-3 |
+| When accuracy drops, measure by segment before deciding who investigates | The loss splits into two segments, each owned by one role (see the next section) | M05, M07-1 |
+
+### Accuracy dropped: which segment to check first
+
+Between fp32 and the device sits the Q/DQ graph. Running three versions on the same evaluation data splits the accuracy loss into two segments:
+
+```text
+fp32 model
+  → Q/DQ graph        Segment 1: loss caused by quantization itself (algorithm engineer)
+  → model on device   Segment 2: differences from lowering and integer kernels (backend deployment engineer)
+```
+
+Segment 1 can be measured inside PyTorch (M05, M06); segment 2 can only be measured once the backend runs the graph on the device.
+Here are three hypothetical accuracy sets showing how to decide:
+
+| fp32 | Q/DQ graph | Device | Verdict |
+|---|---|---|---|
+| 90% | 82% | 82% | Segment 1 already lost it: the device is just faithfully reproducing the Q/DQ graph; go back and change the quantization config or the model |
+| 90% | 89.5% | 82% | Only segment 2 lost it: the Q/DQ graph is fine; investigate lowering or the backend kernels |
+| 90% | 89.5% | 89.4% | Both segments are fine: the small gap between device and Q/DQ graph is integer rounding |
+
+In the first case, no amount of backend tuning will recover it; in the second, more QAT by the algorithm engineer won't help.
+Split by segment first, so neither side wastes effort. The "small gap" in the last row means the device and Q/DQ graph outputs differ by only 1–2 output LSBs (measured in M08 and M09).
+
+## Run on your own machine
+
+The environment is managed with [uv](https://docs.astral.sh/uv/) (Python 3.12). graphviz subgraphs need the system `dot` executable.
+
+```bash
+brew install graphviz          # Ubuntu: sudo apt install graphviz
+uv sync
+uv run jupyter lab             # or open the .ipynb in VS Code and pick .venv as the kernel
+```
