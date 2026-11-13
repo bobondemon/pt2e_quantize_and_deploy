@@ -2,6 +2,12 @@
 title: "PT2E 端到端：邊緣裝置的量化、後端部署與分工"
 ---
 
+寫在前頭的碎嘴
+
+> 感覺現在做教材應該只剩 AI 會看, 但 AI 應該本身就已經有知識了\
+> 讓 AI 協助量化部署, 身為瓶頸的人類還需要懂嗎? 不知道, 至少此時此刻我想做經驗總結\
+> 總之, 這本教材是寫給人看的, 前提是如果還有人想了解的話 ...
+
 用 PyTorch 2 Export（PT2E）把模型量化成 int8 等低位元整數：從 `torch.export` 拿到的圖開始，看 quantizer 怎麼標註、observer 怎麼插、
 convert 之後的圖長什麼樣，最後交給 XNNPACK、ONNX Runtime 這類後端。
 
@@ -39,23 +45,21 @@ Quantizer 就是兩個部分之間的約定。
 
 ## 學習路徑
 
-| 模組 | 主題 | 狀態 |
-|---|---|---|
-| [M00](m00_export_basics/00_overview.ipynb) | `torch.export` 與 fx 改圖 | ✅ |
-| [第一部分概覽](part1_overview.qmd) | 從 fp32 模型到 Q/DQ 圖：故事線與演算法人員的職責 | ✅ |
-| [M01](m01_hello_pt2e/00_overview.ipynb) | 第一次量化：四個步驟、Q/DQ 圖 | ✅ |
-| [M02](m02_observer_fakequant/00_overview.ipynb) | observer 與 fake quant：手插 observer、手做 convert | ✅ |
-| [M03](m03_quantizer_api/00_overview.ipynb) | 標籤與 Quantizer：observer 的位置由誰決定 | ✅ |
-| [M04](m04_conv_bn_folding/00_overview.ipynb) | Conv + BN 折疊：PTQ 在 prepare 折，QAT 在 convert 才折 | ✅ |
-| [M05](m05_ptq_pipeline/00_overview.ipynb) | PTQ 的精度除錯：SQNR、校準、逐層診斷、mixed precision | ✅ |
-| [M06](m06_qat_pipeline/00_overview.ipynb) | QAT 的訓練流程：STE、評估前的開關、訓練圖 = convert 圖、int4 下 QAT vs PTQ | ✅ |
-| [第二部分概覽](part2_overview.qmd) | Q/DQ 圖之後：故事線與後端部署人員的職責 | ✅ |
-| [M07](m07_representation_lowering/00_overview.ipynb) | 後端部署總覽：後端的分層、三條路線、Quantizer 要配後端；Q/DQ 圖經 reference representation、lowering、Inductor 變成什麼；fp32 的數值底線 | ✅ |
-| [M08](m08_xnnpack_executorch/00_overview.ipynb) | XNNPACK／ExecuTorch：Q/DQ 圖 → lowering → `.pte` → runtime；不支援的 op 把圖切開；收益分成換 runtime 與量化兩段 | ✅ |
-| [M09](m09_onnx_runtime/00_overview.ipynb) | ONNX Runtime：Q/DQ 圖匯出成 QDQ ONNX；五個圖最佳化等級在建 session 時換上 int8 kernel；QDQ node fusion 的 op 清單；ORT 自己的量化工具 | ✅ |
-| [M10](m10_custom_backend/00_overview.ipynb) | 自訂後端：把虛構 VPU 的硬體約束寫成 Quantizer；只讀 Q/DQ 圖的檢查 pass；不支援的 op 切回 CPU 的分區圖 | ✅ |
-
-✅ 已完成；🔍 內容已寫好，還在校對，之後可能修改。
+| 模組 | 主題 |
+|---|---|
+| [M00](m00_export_basics/00_overview.ipynb) | `torch.export` 與 fx 改圖 |
+| [第一部分概覽](part1_overview.qmd) | 從 fp32 模型到 Q/DQ 圖：故事線與演算法人員的職責 |
+| [M01](m01_hello_pt2e/00_overview.ipynb) | 第一次量化：四個步驟、Q/DQ 圖 |
+| [M02](m02_observer_fakequant/00_overview.ipynb) | observer 與 fake quant：手插 observer、手做 convert |
+| [M03](m03_quantizer_api/00_overview.ipynb) | 標籤與 Quantizer：observer 的位置由誰決定 |
+| [M04](m04_conv_bn_folding/00_overview.ipynb) | Conv + BN 折疊：PTQ 在 prepare 折，QAT 在 convert 才折 |
+| [M05](m05_ptq_pipeline/00_overview.ipynb) | PTQ 的精度除錯：SQNR、校準、逐層診斷、mixed precision |
+| [M06](m06_qat_pipeline/00_overview.ipynb) | QAT 的訓練流程：STE、評估前的開關、訓練圖 = convert 圖、int4 下 QAT vs PTQ |
+| [第二部分概覽](part2_overview.qmd) | Q/DQ 圖之後：故事線與後端部署人員的職責 |
+| [M07](m07_representation_lowering/00_overview.ipynb) | 後端部署總覽：後端的分層、三條路線、Quantizer 要配後端；Q/DQ 圖經 reference representation、lowering、Inductor 變成什麼；fp32 的數值底線 |
+| [M08](m08_xnnpack_executorch/00_overview.ipynb) | XNNPACK／ExecuTorch：Q/DQ 圖 → lowering → `.pte` → runtime；不支援的 op 把圖切開；收益分成換 runtime 與量化兩段 |
+| [M09](m09_onnx_runtime/00_overview.ipynb) | ONNX Runtime：Q/DQ 圖匯出成 QDQ ONNX；五個圖最佳化等級在建 session 時換上 int8 kernel；QDQ node fusion 的 op 清單；ORT 自己的量化工具 |
+| [M10](m10_custom_backend/00_overview.ipynb) | 自訂後端：把虛構 VPU 的硬體約束寫成 Quantizer；只讀 Q/DQ 圖的檢查 pass；不支援的 op 切回 CPU 的分區圖 |
 
 ### 最精簡的閱讀路徑
 
