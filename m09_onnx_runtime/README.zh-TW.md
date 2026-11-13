@@ -1,5 +1,7 @@
 # M09 — ONNX Runtime：QDQ ONNX 與建 session 時的改寫
 
+> ### 🌐 [English](README.md) ｜ **繁體中文**
+
 從概覽開始讀，再依序打開 notebook。GitHub 上可以直接看到執行結果；要自己改參數再跑，見下方「在自己的電腦上執行」。
 
 這一章走 [M07 概覽](../m07_representation_lowering/00_overview.ipynb)的路線 B；ONNX Runtime、Execution Provider 各在哪一層，先讀 M07 概覽的前半。
