@@ -53,7 +53,7 @@ Quantizer 就是兩個部分之間的約定。
 | [M07](m07_representation_lowering/00_overview.ipynb) | 後端部署總覽：後端的分層、三條路線、Quantizer 要配後端；Q/DQ 圖經 reference representation、lowering、Inductor 變成什麼；fp32 的數值底線 | ✅ |
 | [M08](m08_xnnpack_executorch/00_overview.ipynb) | XNNPACK／ExecuTorch：Q/DQ 圖 → lowering → `.pte` → runtime；不支援的 op 把圖切開；收益分成換 runtime 與量化兩段 | ✅ |
 | [M09](m09_onnx_runtime/00_overview.ipynb) | ONNX Runtime：Q/DQ 圖匯出成 QDQ ONNX；五個圖最佳化等級在建 session 時換上 int8 kernel；QDQ node fusion 的 op 清單；ORT 自己的量化工具 | ✅ |
-| [M10](m10_custom_backend/00_overview.ipynb) | 自訂後端：把虛構 VPU 的硬體約束寫成 Quantizer；只讀 Q/DQ 圖的檢查 pass；不支援的 op 切回 CPU 的分區圖 | 🔍 |
+| [M10](m10_custom_backend/00_overview.ipynb) | 自訂後端：把虛構 VPU 的硬體約束寫成 Quantizer；只讀 Q/DQ 圖的檢查 pass；不支援的 op 切回 CPU 的分區圖 | ✅ |
 
 ✅ 已完成；🔍 內容已寫好，還在校對，之後可能修改。
 
