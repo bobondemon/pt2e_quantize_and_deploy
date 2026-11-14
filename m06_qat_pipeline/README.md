@@ -1,27 +1,31 @@
-# M06 — QAT 的訓練流程
+# M06 — The QAT Training Pipeline
 
-從概覽開始讀，再依序打開 notebook（M06-5、M06-6 是選讀）。GitHub 上可以直接看到執行結果；要自己改參數再跑，見下方「在自己的電腦上執行」。
+> ### 🌐 **English** ｜ [繁體中文](README.zh-TW.md)
 
-| 檔案 | 內容 |
+English notebooks: [../en/m06_qat_pipeline/](../en/m06_qat_pipeline/)
+
+Start with the overview, then open the notebooks in order (M06-5 and M06-6 are optional). You can see the executed results directly on GitHub; to change parameters and run them yourself, see "Running on your own machine" below.
+
+| File | Contents |
 |---|---|
-| [00_overview.ipynb](00_overview.ipynb) | 概覽：int4 下 QAT 追回 PTQ 的精度；fake quant 與 STE 的定義；全章的原則「訓練時的圖 = convert 之後的圖」 |
-| [01_qat_minimal.ipynb](01_qat_minimal.ipynb) | M06-1：STE 的梯度；逐行寫出的最小 QAT 迴圈；convert 之後和 PTQ 同形 |
-| [02_train_eval_switch.ipynb](02_train_eval_switch.ipynb) | M06-2：評估前要切的兩個開關（BN、observer）；`allow_exported_model_train_eval` |
-| [03_fused_fakequant_mismatch.ipynb](03_fused_fakequant_mismatch.ipynb) | M06-3：XNNPACK 預設的 weight fused fake quant 讓訓練圖 ≠ convert 圖；scale 公式與解法 |
-| [04_qat_vs_ptq_int4.ipynb](04_qat_vs_ptq_int4.ipynb) | M06-4：int4 下 QAT 是否比 PTQ 好；和「再訓練後 PTQ」對照，確認效益來自量化適應（5 個 seed，約 30 秒） |
-| [05_learnable_fake_quant.ipynb](05_learnable_fake_quant.ipynb) | M06-5（選讀）：`LearnableFakeQuantize` 的接法、scale 的梯度與軌跡、效果（約 2 分鐘） |
-| [06_weight_norm_qat.ipynb](06_weight_norm_qat.ipynb) | M06-6（選讀）：QAT 保留 `weight_norm` 訓練 g、v；有 BN 時 convert 報錯與解法 |
+| [00_overview.ipynb](00_overview.ipynb) | Overview: QAT winning back the accuracy PTQ loses at int4; definitions of fake quant and STE; the principle of the whole chapter, "the training graph = the graph after convert" |
+| [01_qat_minimal.ipynb](01_qat_minimal.ipynb) | M06-1: the gradient of STE; a minimal QAT loop written out line by line; same shape as PTQ after convert |
+| [02_train_eval_switch.ipynb](02_train_eval_switch.ipynb) | M06-2: the two switches to flip before evaluation (BN, observer); `allow_exported_model_train_eval` |
+| [03_fused_fakequant_mismatch.ipynb](03_fused_fakequant_mismatch.ipynb) | M06-3: XNNPACK's default weight fused fake quant makes the training graph ≠ the convert graph; the scale formulas and the fix |
+| [04_qat_vs_ptq_int4.ipynb](04_qat_vs_ptq_int4.ipynb) | M06-4: whether QAT beats PTQ at int4; compared with "PTQ after retraining" to confirm the benefit comes from quantization adaptation (5 seeds, about 30 seconds) |
+| [05_learnable_fake_quant.ipynb](05_learnable_fake_quant.ipynb) | M06-5 (optional): how to plug in `LearnableFakeQuantize`, the gradient and trajectory of scale, the effect (about 2 minutes) |
+| [06_weight_norm_qat.ipynb](06_weight_norm_qat.ipynb) | M06-6 (optional): QAT that keeps `weight_norm` to train g and v; the convert error with BN and the fix |
 
-## 在自己的電腦上執行
+## Running on your own machine
 
-全專案共用一個 [uv](https://docs.astral.sh/uv/) 環境（Python 3.12，在 `.venv/`），graphviz 的子圖需要系統的 `dot` 執行檔。在專案根目錄執行：
+The whole project shares one [uv](https://docs.astral.sh/uv/) environment (Python 3.12, in `.venv/`); the graphviz subgraphs need the system `dot` executable. Run from the project root:
 
 ```bash
-brew install graphviz          # Ubuntu：sudo apt install graphviz
-uv sync                        # 建立 .venv，全專案只需做一次
+brew install graphviz          # Ubuntu: sudo apt install graphviz
+uv sync                        # create .venv; only needed once for the whole project
 uv run jupyter lab m06_qat_pipeline/00_overview.ipynb
 ```
 
-最後一行用 `.venv` 的 Python 啟動 JupyterLab，並在瀏覽器打開本章的概覽。它只負責打開，不會自動執行：
-要逐格按 Shift+Enter，或選選單的 Run → Run All Cells。其他 notebook 從左側的檔案瀏覽器打開。
-也可以改用 VS Code 開 `.ipynb`，kernel 選 `.venv`。
+The last line starts JupyterLab with the `.venv` Python and opens this chapter's overview in the browser. It only opens it and does not run anything automatically:
+press Shift+Enter cell by cell, or choose Run → Run All Cells from the menu. Open the other notebooks from the file browser on the left.
+You can also open the `.ipynb` in VS Code and pick `.venv` as the kernel.

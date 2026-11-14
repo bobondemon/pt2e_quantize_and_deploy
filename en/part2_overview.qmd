@@ -1,0 +1,143 @@
+---
+title: "Part 2 Overview | After the Q/DQ Graph: Handing Off to the Backend (M07–M10)"
+---
+
+The end point of [Part 1](part1_overview.qmd) is the Q/DQ graph: where to quantize and with which qparams are all written on the graph, but the ops are still fp32, so it **does not get faster**.
+Part 2 (M07–M10) answers what comes next: who replaces the quantized ops on the graph with real int8 kernels, at which step, what to do about what can't be replaced, and how to verify numerics and speed afterwards.
+The last chapter turns around to the backend's side, writes hardware constraints into a Quantizer, and hands it back to Part 1.
+
+## Part 2 on one page
+
+What every backend looks for on the Q/DQ graph is a **unit**: a dq → op → q segment.
+Its semantics are int8 in, int8 out, with the computation in the middle still in fp32 (M07 overview):
+
+```text
+int8 ─ dq ─→ fp32 ─ conv2d, relu ─→ fp32 ─ q ─→ int8
+```
+
+Recognizing this unit and replacing it with one int8 kernel is the through-line of every chapter in Part 2. Four chapters look at four places where it is done:
+
+```{mermaid}
+flowchart LR
+    QDQ["Q/DQ graph<br/>end of Part 1"]
+    QDQ --> P["Inside PyTorch<br/>reference / x86 lowering / Inductor<br/>M07"]
+    QDQ --> A["Re-export → .pte<br/>ExecuTorch + XNNPACK<br/>M08"]
+    QDQ --> B["torch.onnx.export → QDQ ONNX<br/>ONNX Runtime + MLAS<br/>M09"]
+    QDQ --> C["Custom VPU<br/>check the Q/DQ graph, fall back to CPU<br/>M10"]
+```
+
+## The storyline: three segments
+
+### The map and the rules (M07)
+
+| Question | One-line answer |
+|---|---|
+| Are ExecuTorch, ORT, and XNNPACK the same kind of thing? | No: an inference framework, a hardware-extension unit, and a kernel library are three layers |
+| How many routes are there from a Q/DQ graph? | Three; they differ in the bridging step and in "who recognizes the unit, and at which step" |
+| What must be decided before quantizing? | The deployment backend: the Quantizer must be designed around that backend's kernels |
+| Can PyTorch itself turn a unit into integers? | Only when a pattern matches; in the author's environment none of the convs became int8 |
+| What to know before comparing the numerics of two implementations? | fp32 differs by 1e-5–1e-4 just by switching kernels; that is the floor |
+
+The details are in the [M07 overview](m07_representation_lowering/00_overview.ipynb): the first half is the map shared by M07–M10, the second half is M07 itself.
+
+### Two real routes (M08, M09)
+
+The same Q/DQ graph goes to two backends that really have int8 kernels on CPU, and the same set of questions is asked:
+
+| Question | M08: ExecuTorch + XNNPACK | M09: ONNX Runtime |
+|---|---|---|
+| Deployment file | `.pte` | QDQ ONNX (`.onnx`) |
+| Who recognizes the unit | `XnnpackPartitioner` | ORT's QDQ node fusion |
+| When | At export time | At session creation, from `ORT_ENABLE_EXTENDED` up |
+| Kernel library | XNNPACK | The CPU EP's MLAS |
+| Unsupported ops | Split into several delegates, with portable kernels in between | Stay in fp32, with one int8 ↔ fp32 conversion before and after |
+| fp32 bias in the Q/DQ graph | Quantized to int32 during lowering | Quantized to int32 from `ORT_ENABLE_BASIC` up |
+| Output vs the Q/DQ graph | Not guaranteed bit-identical; error of the same magnitude | Same as left |
+
+Each of the two chapters has a side branch: M08-1 explains the two same-named `XNNPACKQuantizer`s (use the executorch one to export `.pte`);
+M09-3 compares ORT's own `quantize_static`, and the QDQ format vs the QOperator format (who decides to swap in int8 ops).
+
+### Standing on the backend's side (M10)
+
+The backends in M08 and M09 are forgiving; NPU- and VPU-type hardware is usually much narrower. M10 invents a VPU and does the three things a backend author has to do:
+
+```text
+Hardware constraints
+  → MyVPUQuantizer     write the constraints as annotations: qscheme, pow2 observer, Shared, Derived
+  → validate()         conditions annotations can't express (static shape), blocked at prepare
+  → check_vpu()        reads only the Q/DQ graph, checks whether the constraints were really enforced
+  → partition()        ops outside the list fall back to CPU; report subgraphs and boundaries
+```
+
+Two conclusions connect Part 2 back to Part 1:
+
+- A backend can't just trust the Quantizer: XNNPACK's Q/DQ graph is reasonable on CPU but violates five rules of this VPU (M10-2).
+- The Quantizer and the partitioner read the same op list, so how much of the model can run on the accelerator is decided when the architecture is chosen (M10-3).
+
+## Four checks that keep coming back
+
+| Check | How | Where |
+|---|---|---|
+| Which ops did not become int8 | Look at the annotations before quantizing; look at the delegation table, fusion list, or fallback report before deploying | M08-3, M09 overview, M10-3 |
+| Are the numerics right | Know the fp32 floor first, and compare only the final output | M07-1 |
+| Did it get faster | The baseline is fp32 in the same runtime, not PyTorch eager | M08-4 |
+| Does the graph fit the hardware spec | Write a check pass that reads only the Q/DQ graph | M10-2 |
+
+"Compare only the final output" uses four metrics (M07 overview, "Rules Before Comparing Backends"):
+
+| Metric | What it answers |
+|---|---|
+| SQNR and accuracy against fp32 | Did accuracy get worse |
+| Fraction of outputs that are bit-identical | How close to the Q/DQ graph |
+| argmax agreement rate | Did the classification result change |
+| Maximum difference in output LSBs | Whether the difference is just rounding |
+
+## The role in Part 2: the backend deployment engineer
+
+In practice, Part 2 is usually owned by the **backend deployment engineer**: confirm the target platform, provide the Quantizer,
+and after receiving the Q/DQ graph do graph optimization, acceleration, debugging, and accuracy confirmation until the model runs on the device.
+How the two roles collaborate is in the [home page](index.qmd), "Two roles".
+
+### Before quantizing: what to hand to the algorithm engineer
+
+| Deliverable | Content | Related chapters |
+|---|---|---|
+| Quantizer | Annotation rules designed around the target kernels, including PTQ and QAT configs | M07 overview, M10-1 |
+| Op list | Which ops have int8 kernels; ops outside the list split the graph | M09 overview, M10-3 |
+| Hardware constraints | Static shape, bit width, the form of the scale (e.g. powers of 2) | M10-1 |
+| Verification of the QAT config | Confirm the fake-quant graph and the convert graph give the same output | M06-3 |
+| Export requirements | For example, OpenVINO needs `convert_pt2e(..., fold_quantize=False)` | M07 overview |
+
+The Quantizer should ship with a `validate()`: constraints that annotations can't express are raised as errors at prepare,
+rather than discovered only after the algorithm engineer has finished training and delivered (M10-1).
+
+### After receiving the Q/DQ graph
+
+```text
+Receive the Q/DQ graph, fp32 model, data, and accuracy report
+  → compliance check   do scale, zero point, bias, and shape fit the hardware (M10-2)
+  → lowering           produce a .pte, build an ORT session, or use your own compiler (M08, M09)
+  → graph optimization e.g. ORT's optimization levels: fusion, layout (M09-2)
+  → fallback report    which ops didn't make it into the accelerator, how many segments (M08-3, M10-3)
+  → numeric validation measure the fp32 floor first, then compare device output with the Q/DQ graph (M07-1)
+  → speed              compare with fp32 in the same runtime (M08-4)
+  → report back        what the algorithm engineer should change, with numbers attached
+```
+
+Typical things to report back to the algorithm engineer: ops outside the list (suggest replacing them with ops on the list, such as sigmoid → relu in M10-3),
+accuracy dropping on the device but not on the Q/DQ graph (the backend investigates this itself), and whether changing the model is worthwhile when speed is insufficient.
+
+### Whose problem is it: split by the numbers
+
+| Symptom | Check whom first | Tool |
+|---|---|---|
+| Accuracy already drops on the Q/DQ graph vs fp32 | Algorithm engineer: quantization config or model | Per-layer SQNR (M05), QAT (M06) |
+| Q/DQ graph is fine, device output is far off | Backend deployment engineer: lowering or kernels | The four final-output metrics (M07) |
+| Device and Q/DQ graph differ by only 1–2 output LSBs | Normal integer rounding, no need to chase | Measurements in M08, M09 |
+| An op didn't reach the accelerator, speed is insufficient | Both together: swap the op or adjust the partitioning | Fallback report (M10-3) |
+
+"Far off" means beyond rounding magnitude: much more than a few output LSBs, or an SQNR against fp32 clearly lower than the Q/DQ graph's.
+
+## Back to the big picture
+
+How the two parts connect and how the two roles collaborate is in the [home page](index.qmd).

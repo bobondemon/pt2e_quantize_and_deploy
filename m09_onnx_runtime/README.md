@@ -1,27 +1,31 @@
-# M09 — ONNX Runtime：QDQ ONNX 與建 session 時的改寫
+# M09 — ONNX Runtime: QDQ ONNX and the Rewrites at Session Creation
 
-從概覽開始讀，再依序打開 notebook。GitHub 上可以直接看到執行結果；要自己改參數再跑，見下方「在自己的電腦上執行」。
+> ### 🌐 **English** ｜ [繁體中文](README.zh-TW.md)
 
-這一章走 [M07 概覽](../m07_representation_lowering/00_overview.ipynb)的路線 B；ONNX Runtime、Execution Provider 各在哪一層，先讀 M07 概覽的前半。
-ORT 改寫出來的圖和平台有關（x86 與 arm 不同）。notebook 裡存的輸出來自 macOS arm64、torch 2.14.0、onnxruntime 1.30.0；在你的機器上執行時，說明會依實測印出。
+English notebooks: [../en/m09_onnx_runtime/](../en/m09_onnx_runtime/)
 
-| 檔案 | 內容 |
+Start with the overview, then open the notebooks in order. You can see the executed results directly on GitHub; to change parameters and run them yourself, see "Running on Your Own Machine" below.
+
+This chapter follows Route B of the [M07 overview](../m07_representation_lowering/00_overview.ipynb); for which layer ONNX Runtime and the Execution Provider each sit in, read the first half of the M07 overview first.
+The graph ORT rewrites depends on the platform (x86 differs from arm). The outputs stored in the notebooks come from macOS arm64, torch 2.14.0, onnxruntime 1.30.0; when you run them on your machine, the explanations are printed according to what is actually measured.
+
+| File | Contents |
 |---|---|
-| [00_overview.ipynb](00_overview.ipynb) | 概覽：conv + relu 用原始 API 走完 PT2E → QDQ ONNX → ORT；五個圖最佳化等級在 ORT 1.30 原始碼裡各做什麼；QDQ node fusion 的三組；與平台有關的改寫；和 M08 的對照；CPU 與 VPU／NPU 的差別 |
-| [01_onnx_qdq_export.ipynb](01_onnx_qdq_export.ipynb) | M09-1：Q/DQ 圖匯出成 QDQ ONNX，每個 op 變成什麼；檔案裡存了什麼；動態 batch 要再講一次 |
-| [02_ort_qdq_fusion.ipynb](02_ort_qdq_fusion.ipynb) | M09-2：TinyConvNet 在五個等級各被改成什麼；int32 bias；Relu 為什麼消失；`ReduceMean` 留在 fp32 |
-| [03_ort_quant_compare.ipynb](03_ort_quant_compare.ipynb) | M09-3：ORT 的 `quantize_static` vs PT2E；QDQ format 與 QOperator format |
+| [00_overview.ipynb](00_overview.ipynb) | Overview: conv + relu through PT2E → QDQ ONNX → ORT with the raw APIs; what each of the five graph optimization levels does in the ORT 1.30 source; the three groups of QDQ node fusion; platform-dependent rewrites; comparison with M08; CPU vs. VPU/NPU |
+| [01_onnx_qdq_export.ipynb](01_onnx_qdq_export.ipynb) | M09-1: exporting the Q/DQ graph as QDQ ONNX, what each op becomes; what the file stores; dynamic batch has to be stated again |
+| [02_ort_qdq_fusion.ipynb](02_ort_qdq_fusion.ipynb) | M09-2: what TinyConvNet is rewritten into at each of the five levels; int32 bias; why Relu disappears; `ReduceMean` stays in fp32 |
+| [03_ort_quant_compare.ipynb](03_ort_quant_compare.ipynb) | M09-3: ORT's `quantize_static` vs PT2E; QDQ format vs QOperator format |
 
-## 在自己的電腦上執行
+## Running on Your Own Machine
 
-全專案共用一個 [uv](https://docs.astral.sh/uv/) 環境（Python 3.12，在 `.venv/`），graphviz 的子圖需要系統的 `dot` 執行檔。`onnx`、`onnxscript`、`onnxruntime` 是主依賴，不需要另外安裝。在專案根目錄執行：
+The whole project shares one [uv](https://docs.astral.sh/uv/) environment (Python 3.12, in `.venv/`); the graphviz subgraphs need the system `dot` executable. `onnx`, `onnxscript`, and `onnxruntime` are main dependencies, so no separate install is needed. Run from the project root:
 
 ```bash
-brew install graphviz          # Ubuntu：sudo apt install graphviz
-uv sync                        # 建立 .venv，全專案只需做一次
+brew install graphviz          # Ubuntu: sudo apt install graphviz
+uv sync                        # creates .venv; needed only once for the whole project
 uv run jupyter lab m09_onnx_runtime/00_overview.ipynb
 ```
 
-最後一行用 `.venv` 的 Python 啟動 JupyterLab，並在瀏覽器打開本章的概覽。它只負責打開，不會自動執行：
-要逐格按 Shift+Enter，或選選單的 Run → Run All Cells。其他 notebook 從左側的檔案瀏覽器打開。
-也可以改用 VS Code 開 `.ipynb`，kernel 選 `.venv`。
+The last line starts JupyterLab with the `.venv` Python and opens this chapter's overview in the browser. It only opens it and does not run anything automatically:
+press Shift+Enter cell by cell, or choose Run → Run All Cells from the menu. Open the other notebooks from the file browser on the left.
+You can also open the `.ipynb` in VS Code and pick the `.venv` kernel.

@@ -1,24 +1,28 @@
-# M04 — Conv + BN 折疊
+# M04 — Conv + BN Folding
 
-從概覽開始讀，再依序打開三本 notebook。GitHub 上可以直接看到執行結果；要自己改參數再跑，見下方「在自己的電腦上執行」。
+> ### 🌐 **English** ｜ [繁體中文](README.zh-TW.md)
 
-| 檔案 | 內容 |
+English notebooks: [../en/m04_conv_bn_folding/](../en/m04_conv_bn_folding/)
+
+Start with the overview, then open the three notebooks in order. On GitHub you can see the execution results directly; to change parameters and run it yourself, see "Running on your own machine" below.
+
+| File | Contents |
 |---|---|
-| [00_overview.ipynb](00_overview.ipynb) | 概覽：為什麼折 BN、折疊公式、PTQ 與 QAT 各在哪一步折；QAT 的 fake quant 為什麼量化 $W_{inf}$、慢版與近似版 |
-| [01_bn_folding_trace.ipynb](01_bn_folding_trace.ipynb) | M04-1：PTQ 的 BN 在 `prepare_pt2e` 消失；weight 與 bias 怎麼改寫；conv 與 relu 之間多一個量化點時 convert 後的樣子 |
-| [02_qat_graph_structure.ipynb](02_qat_graph_structure.ipynb) | M04-2：`prepare_qat_pt2e` 的 conv + BN 子圖每個 op 在算什麼；convert 時怎麼折、什麼情況下折不掉 |
-| [03_qat_vs_article.ipynb](03_qat_vs_article.ipynb) | M04-3：PT2E 的 QAT 子圖與 PyTorch `_forward_approximate`（近似版）逐位元相同；和白皮書的慢版差多少 |
+| [00_overview.ipynb](00_overview.ipynb) | Overview: why fold BN, the folding formulas, at which step PTQ and QAT each fold; why QAT's fake quant quantizes $W_{inf}$, the slow version and the approximate version |
+| [01_bn_folding_trace.ipynb](01_bn_folding_trace.ipynb) | M04-1: PTQ's BN disappears at `prepare_pt2e`; how weight and bias are rewritten; what it looks like after convert when there is an extra quantization point between conv and relu |
+| [02_qat_graph_structure.ipynb](02_qat_graph_structure.ipynb) | M04-2: what each op of the conv + BN subgraph from `prepare_qat_pt2e` computes; how convert folds, and when folding fails |
+| [03_qat_vs_article.ipynb](03_qat_vs_article.ipynb) | M04-3: PT2E's QAT subgraph is bit-for-bit identical to PyTorch's `_forward_approximate` (approximate version); how much it differs from the whitepaper's slow version |
 
-## 在自己的電腦上執行
+## Running on your own machine
 
-全專案共用一個 [uv](https://docs.astral.sh/uv/) 環境（Python 3.12，在 `.venv/`），graphviz 的子圖需要系統的 `dot` 執行檔。在專案根目錄執行：
+The whole project shares one [uv](https://docs.astral.sh/uv/) environment (Python 3.12, in `.venv/`), and the graphviz subgraphs need the system `dot` executable. Run from the project root:
 
 ```bash
-brew install graphviz          # Ubuntu：sudo apt install graphviz
-uv sync                        # 建立 .venv，全專案只需做一次
+brew install graphviz          # Ubuntu: sudo apt install graphviz
+uv sync                        # creates .venv; only needed once for the whole project
 uv run jupyter lab m04_conv_bn_folding/00_overview.ipynb
 ```
 
-最後一行用 `.venv` 的 Python 啟動 JupyterLab，並在瀏覽器打開本章的概覽。它只負責打開，不會自動執行：
-要逐格按 Shift+Enter，或選選單的 Run → Run All Cells。其他 notebook 從左側的檔案瀏覽器打開。
-也可以改用 VS Code 開 `.ipynb`，kernel 選 `.venv`。
+The last line starts JupyterLab with the `.venv` Python and opens this chapter's overview in the browser. It only opens it and does not run anything automatically:
+press Shift+Enter cell by cell, or use the menu Run → Run All Cells. Open the other notebooks from the file browser on the left.
+You can also open the `.ipynb` in VS Code and pick `.venv` as the kernel.

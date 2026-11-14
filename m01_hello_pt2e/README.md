@@ -1,24 +1,28 @@
-# M01 — 第一次量化
+# M01 — Your First Quantization
 
-從概覽開始讀，再依序打開三本 notebook。GitHub 上可以直接看到執行結果；要自己改參數再跑，見下方「在自己的電腦上執行」。
+> ### 🌐 **English** ｜ [繁體中文](README.zh-TW.md)
 
-| 檔案 | 內容 |
+English notebooks: [../en/m01_hello_pt2e/](../en/m01_hello_pt2e/)
+
+Start with the overview, then open the three notebooks in order. You can see the executed results directly on GitHub; to change parameters and run them yourself, see "Running on Your Own Machine" below.
+
+| File | Contents |
 |---|---|
-| [00_overview.ipynb](00_overview.ipynb) | 概覽：量化要回答哪三個問題、scale／zero point、observer、Q/DQ 圖 |
-| [01_minimal_ptq.ipynb](01_minimal_ptq.ipynb) | M01-1：四個步驟走一遍，每一步圖怎麼變、精度掉多少 |
-| [02_graph_diff.ipynb](02_graph_diff.ipynb) | M01-2：prepare／convert 改了圖的哪裡、quantizer 實際管了哪些 op |
-| [03_config_matrix.ipynb](03_config_matrix.ipynb) | M01-3：per-channel、QAT、dynamic 三個開關各改變了什麼 |
+| [00_overview.ipynb](00_overview.ipynb) | Overview: the three questions quantization has to answer, scale / zero point, observers, the Q/DQ graph |
+| [01_minimal_ptq.ipynb](01_minimal_ptq.ipynb) | M01-1: the four steps end to end, how the graph changes at each step and how much accuracy drops |
+| [02_graph_diff.ipynb](02_graph_diff.ipynb) | M01-2: what prepare / convert change in the graph, which ops the quantizer actually covers |
+| [03_config_matrix.ipynb](03_config_matrix.ipynb) | M01-3: what the three switches per-channel, QAT, and dynamic each change |
 
-## 在自己的電腦上執行
+## Running on Your Own Machine
 
-全專案共用一個 [uv](https://docs.astral.sh/uv/) 環境（Python 3.12，在 `.venv/`），graphviz 的子圖需要系統的 `dot` 執行檔。在專案根目錄執行：
+The whole project shares one [uv](https://docs.astral.sh/uv/) environment (Python 3.12, in `.venv/`), and graphviz subgraphs need the system `dot` executable. Run from the project root:
 
 ```bash
-brew install graphviz          # Ubuntu：sudo apt install graphviz
-uv sync                        # 建立 .venv，全專案只需做一次
+brew install graphviz          # Ubuntu: sudo apt install graphviz
+uv sync                        # creates .venv; only needed once for the whole project
 uv run jupyter lab m01_hello_pt2e/00_overview.ipynb
 ```
 
-最後一行用 `.venv` 的 Python 啟動 JupyterLab，並在瀏覽器打開本章的概覽。它只負責打開，不會自動執行：
-要逐格按 Shift+Enter，或選選單的 Run → Run All Cells。其他 notebook 從左側的檔案瀏覽器打開。
-也可以改用 VS Code 開 `.ipynb`，kernel 選 `.venv`。
+The last line starts JupyterLab with the `.venv` Python and opens this chapter's overview in the browser. It only opens it and does not run anything automatically:
+press Shift+Enter cell by cell, or use the menu Run → Run All Cells. Open the other notebooks from the file browser on the left.
+You can also open the `.ipynb` in VS Code and pick the `.venv` kernel.

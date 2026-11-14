@@ -1,141 +1,162 @@
-# PT2E 端到端：邊緣裝置的量化、後端部署與分工
+# End-to-End PT2E: Quantization, Backend Deployment, and Who Does What on Edge Devices
 
-[![Website](https://img.shields.io/badge/%E7%B6%B2%E7%AB%99-%E9%96%B1%E8%AE%80%E6%95%99%E6%9D%90-blue)](https://bobondemon.github.io/pt2e_quantize_and_deploy/)
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/bobondemon/pt2e_quantize_and_deploy/blob/main/m01_hello_pt2e/00_overview.ipynb)
+> ### 🌐 **English** ｜ [繁體中文](README.zh-TW.md)
+
+[![Website](https://img.shields.io/badge/Website-Read%20the%20course-blue)](https://bobondemon.github.io/pt2e_quantize_and_deploy/en/)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/bobondemon/pt2e_quantize_and_deploy/blob/main/en/m01_hello_pt2e/00_overview.ipynb)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-用 PyTorch 2 Export（PT2E）把模型量化成 int8，再交給 ExecuTorch + XNNPACK、ONNX Runtime 這類後端執行的動手教材。
+A hands-on course on quantizing models to int8 with PyTorch 2 Export (PT2E) and handing them to backends such as ExecuTorch + XNNPACK and ONNX Runtime.
 
-這份教材的對象是算力與功耗有限的邊緣裝置（例如 always-on 的感測、語音喚醒）：模型小、整張圖跑整數（以 int8 為主）、shape 固定、後端支援的 op 有限。
-LLM 常見的 weight-only int4、KV cache 量化不在範圍內。
+The course targets edge devices with limited compute and power (for example always-on sensing and voice wake-up): small models, a fully integer graph (mostly int8), fixed shapes, and a limited set of ops supported by the backend.
+Weight-only int4 and KV-cache quantization, as commonly used for LLMs, are out of scope.
 
-**📖 請到網站閱讀：<https://bobondemon.github.io/pt2e_quantize_and_deploy/>**
+**📖 Read it on the website: <https://bobondemon.github.io/pt2e_quantize_and_deploy/en/>** (中文版：<https://bobondemon.github.io/pt2e_quantize_and_deploy/>)
 
-這個 repo 是教材的原始檔。網站把各章的 notebook、圖與表格排成一本書，有側邊欄目錄與搜尋，比在 GitHub 上逐檔點開好讀。
+This repo holds the source of the course. The website lays the chapters' notebooks, figures, and tables out as a book, with a sidebar table of contents and search — easier to read than opening files one by one on GitHub.
 
-## 適合誰
-如果你需要在 edge 端訓練模型、量化、部署模型，又或者想知道 *模型演算法工程師*、*後端部署工程師* 兩個角色的分工職責，此教材正是為你(人類)而寫
-> [TODO]: 考慮寫個給 AI Agent 的角色說明書
+## Who is this for
+If you need to train, quantize, and deploy models on the edge, or you want to know how the two roles — the *model algorithm engineer* and the *backend deployment engineer* — divide their work, this course is written for you (a human).
+> [TODO]: consider writing a role guide for AI agents
 
-- 用過 PyTorch 訓練模型，想把模型量化成 int8、部署到 CPU 或加速器上的演算法工程師。
-- 讀過 `torch.ao.quantization` 時代的文章，想知道 PT2E 現在怎麼用的人：API 在 torch 2.14 已搬到 torchao，舊文章的 import 路徑多半失效。
-- 負責模型部署、需要寫或讀 Quantizer 的後端工程師。
+- Algorithm engineers who have trained models in PyTorch and want to quantize them to int8 and deploy them on a CPU or accelerator.
+- People who have read `torch.ao.quantization`-era articles and want to know how PT2E is used today: the API moved to torchao in torch 2.14, so the import paths in older articles mostly no longer work.
+- Backend engineers responsible for model deployment who need to write or read a Quantizer.
 
-不需要量化的背景；需要知道 `nn.Module` 怎麼寫、怎麼訓練。PT2E 的每一步都在改 `torch.fx` 的圖，
-不熟 fx 可以先讀 [PyTorch FX 的 Graph／Node 一些基礎概念](https://bobondemon.github.io/2025/07/29/%E7%AD%86%E8%A8%98-PyTorch-FX-%E7%9A%84-Graph-Node-%E4%B8%80%E4%BA%9B%E5%9F%BA%E7%A4%8E%E6%A6%82%E5%BF%B5/)，M00 也會用小例子帶過。
+No quantization background is needed; you should know how to write and train an `nn.Module`. Every step of PT2E edits a `torch.fx` graph;
+if you are not familiar with fx, first read [PyTorch FX Graph / Node basics](https://bobondemon.github.io/2025/07/29/%E7%AD%86%E8%A8%98-PyTorch-FX-%E7%9A%84-Graph-Node-%E4%B8%80%E4%BA%9B%E5%9F%BA%E7%A4%8E%E6%A6%82%E5%BF%B5/) (blog post, in Chinese); M00 also walks through it with small examples.
 
-## 兩個部分、兩種角色
+## Two parts, two roles
 
-教材以 `convert_pt2e` 產生的 **Q/DQ 圖**為界分成兩部分，實務上通常各由一種角色負責：
+The course is split into two parts at the **Q/DQ graph** produced by `convert_pt2e`, and in practice each part is usually owned by one role:
 
-| | 第一部分（M01～M06） | 第二部分（M07～M10） |
+| | Part 1 (M01–M06) | Part 2 (M07–M10) |
 |---|---|---|
-| 做什麼 | fp32 模型 → PTQ／QAT → Q/DQ 圖 | Q/DQ 圖 → 後端的 int8 kernel → 裝置 |
-| 角色 | 演算法人員：建模、訓練、量化 | 後端部署人員：選定平台、提供 Quantizer、lowering 與驗證 |
+| What happens | fp32 model → PTQ / QAT → Q/DQ graph | Q/DQ graph → the backend's int8 kernels → device |
+| Role | Algorithm engineer: modeling, training, quantization | Backend deployment engineer: picks the platform, provides the Quantizer, lowering and verification |
 
-兩種角色不是各做各的：Quantizer 是後端照自己的 kernel 設計的，所以要先選後端、再量化。合作的順序：
+The two roles do not work separately: the Quantizer is designed around the backend's own kernels, so you pick the backend first and then quantize. The order of collaboration:
 
 ```mermaid
 sequenceDiagram
-    participant A as 演算法人員
-    participant B as 後端部署人員
-    B->>A: Quantizer、op 清單、shape 與位元數限制
-    A->>A: 設計並訓練 fp32 模型，避開清單外的 op
-    A->>A: PTQ 或 QAT，在 Q/DQ 圖上確認精度
-    A->>B: Q/DQ 圖、fp32 模型、資料、精度報告
-    B->>B: 合規檢查、lowering、fallback 報告
-    B->>B: 數值與速度驗證
-    B-->>A: 回報 fallback 的 op、精度落差、速度
-    A->>B: 修改後的 Q/DQ 圖
+    participant A as Algorithm engineer
+    participant B as Backend deployment engineer
+    B->>A: Quantizer, op list, shape and bit-width constraints
+    A->>A: Design and train the fp32 model, avoiding ops outside the list
+    A->>A: PTQ or QAT, confirm accuracy on the Q/DQ graph
+    A->>B: Q/DQ graph, fp32 model, data, accuracy report
+    B->>B: Compliance check, lowering, fallback report
+    B->>B: Numerics and speed verification
+    B-->>A: Report ops that fell back, accuracy gap, speed
+    A->>B: Revised Q/DQ graph
 ```
 
-最後兩步通常會來回好幾次。交接的內容、精度掉了先查哪一段，詳見[網站首頁](https://bobondemon.github.io/pt2e_quantize_and_deploy/)。
+The last two steps usually go back and forth several times. For what gets handed over and which segment to check first when accuracy drops, see the [website home page](https://bobondemon.github.io/pt2e_quantize_and_deploy/en/).
 
-## 怎麼讀、怎麼執行
+## How to read it and how to run it
 
-- **讀**：在[網站](https://bobondemon.github.io/pt2e_quantize_and_deploy/)上依側邊欄的順序讀。每一章先有一篇概覽(`00_overview.ipynb`)，講這一章要回答的問題與核心概念，之後的 notebook 逐一動手驗證。
-  notebook 的輸出都已經跑好，不執行也能看到結果。
-- **自己執行**：點每本 notebook 頂端的 **Open in Colab** 按鈕，在 Colab 逐格執行、改參數再跑。
-  第一個 code cell 會下載本教材的程式並安裝固定版本的套件（第一次約需幾分鐘），之後照順序執行即可。
-  模型都很小、資料是程式產生的，只用 CPU 就跑得完，不必下載資料集。
-- **在自己的電腦上執行**：用 [uv](https://docs.astral.sh/uv/) 建環境，指令寫在每一章資料夾的 `README.md`。
+- **Read**: on the [website](https://bobondemon.github.io/pt2e_quantize_and_deploy/en/), in the order of the sidebar. Each chapter starts with an overview (`00_overview.ipynb`) stating the questions it answers and its core concepts; the notebooks after it verify them hands-on one by one.
+  All notebook outputs have already been run, so you can see the results without executing anything.
+- **Run it yourself**: click the **Open in Colab** button at the top of each notebook and run it cell by cell in Colab, changing parameters and rerunning.
+  The first code cell downloads the course code and installs pinned package versions (it takes a few minutes the first time); after that, run the cells in order.
+  The models are all tiny and the data is generated by code, so everything runs on CPU alone — no dataset download.
+- **Run on your own machine**: set up the environment with [uv](https://docs.astral.sh/uv/); the commands are in the `README.md` of each chapter folder.
 
-notebook 裡存的輸出來自 macOS arm64、Python 3.12、torch 2.14.0、torchao 0.18.0、executorch 1.5.0、onnxruntime 1.30.0。
-數值與速度和平台有關的 notebook 會先印出執行環境，再依實測結果說明。
+The outputs stored in the notebooks come from macOS arm64, Python 3.12, torch 2.14.0, torchao 0.18.0, executorch 1.5.0, onnxruntime 1.30.0.
+Notebooks whose numerics or speed depend on the platform print the execution environment first, then explain according to the measured results.
 
-## 目錄結構
+## Repository layout
 
 ```text
 .
-├── index.qmd                  網站首頁：故事線、學習路徑、兩種角色
-├── part1_overview.qmd         第一部分概覽（M01～M06）
-├── part2_overview.qmd         第二部分概覽（M07～M10）
+├── index.qmd                  Chinese site home page: storyline, learning path, the two roles
+├── part1_overview.qmd         Part 1 overview (M01–M06)
+├── part2_overview.qmd         Part 2 overview (M07–M10)
 ├── m00_export_basics/ … m10_custom_backend/
-│   ├── 00_overview.ipynb      每章的概覽
-│   ├── 01_….ipynb …           依序閱讀的 notebook
-│   └── README.md              該章的索引與執行方式
-├── common/                    notebook 共用的小工具（畫圖、小模型、合成資料、PT2E API 的單一入口）
-├── _quarto.yml                網站設定
-└── .github/workflows/publish.yml   push 到 main 時自動建置網站、發佈到 GitHub Pages
+│   ├── 00_overview.ipynb      Overview of each chapter (Chinese)
+│   ├── 01_….ipynb …           Notebooks to read in order (Chinese)
+│   ├── README.md              Chapter index and how to run (English)
+│   └── README.zh-TW.md        Same, in Chinese
+├── en/                        English edition of the site: index.qmd, the overviews, and the m00–m10 notebooks
+├── common/                    Small utilities shared by the notebooks (plotting, tiny models, synthetic data, a single entry point for the PT2E API)
+├── _quarto.yml                Site config (Chinese); en/_quarto.yml is the English one
+└── .github/workflows/publish.yml   Builds both sites and publishes them to GitHub Pages on push to main
 ```
 
-## 環境與指令（給想修改教材的人）
+The Chinese notebooks live in the chapter folders (`m*/`) and the English ones in `en/m*/`; the two stay in sync chapter by chapter.
 
-環境用 [uv](https://docs.astral.sh/uv/) 管理（Python 3.12，venv 在 `.venv/`），指令一律用 `uv run`，不必 activate。
-graphviz 的子圖需要系統的 `dot` 執行檔。在專案根目錄執行：
+## Environment and commands (for people who want to modify the course)
+
+The environment is managed with [uv](https://docs.astral.sh/uv/) (Python 3.12, venv in `.venv/`); always use `uv run`, no need to activate.
+graphviz subgraphs need the system `dot` executable. From the project root:
 
 ```bash
-brew install graphviz                          # Ubuntu：sudo apt install graphviz
-uv sync --group executorch --group site        # executorch 只有 M08 用；site 是 pip 版 quarto
-uv run python check_env.py                     # 版本、PT2E API 的位置，並跑一次端到端量化
-uv run --group site quarto preview             # 在瀏覽器預覽網站
-uv run --group site quarto render              # 建網站到 _site/
+brew install graphviz                          # Ubuntu: sudo apt install graphviz
+uv sync --group executorch --group site        # executorch is only used by M08; site is the pip build of quarto
+uv run python check_env.py                     # versions, where the PT2E API lives, and one end-to-end quantization run
+uv run --group site quarto preview             # preview the Chinese site in the browser
+uv run --group site quarto preview en          # preview the English site
+uv run --group site quarto render              # build the Chinese site into _site/
+uv run --group site quarto render en           # build the English site into en/_site/ (CI moves it to _site/en/)
 ```
 
-網站建置時不執行 notebook，直接用存在檔案裡的輸出；所以改了 notebook 要先重新執行再建網站。
-重新執行一本 notebook（`--inplace` 會把新的輸出寫回檔案）：
+Notebooks are not executed during the site build; the outputs stored in the files are used. So after changing a notebook, rerun it before building the site.
+To rerun one notebook (`--inplace` writes the new outputs back to the file):
 
 ```bash
 uv run jupyter nbconvert --to notebook --execute --inplace \
   --ClearMetadataPreprocessor.enabled=True m10_custom_backend/01_vpu_quantizer.ipynb
 ```
 
-### 編寫 notebook
+### Writing notebooks
 
-`.ipynb` 是唯一的原始檔。比較好編輯的方式是用 [jupytext](https://jupytext.readthedocs.io/) 的 percent 格式
-（`# %%` 是 code cell，`# %% [markdown]` 是說明），在 repo 外的暫存資料夾編輯，再轉回 notebook：
+`.ipynb` is the only source file. A more convenient way to edit is [jupytext](https://jupytext.readthedocs.io/)'s percent format
+(`# %%` is a code cell, `# %% [markdown]` is prose): edit in a scratch folder outside the repo, then convert back to a notebook:
 
 ```bash
-# notebook → percent .py（放在 repo 外）
+# notebook → percent .py (outside the repo)
 uv run jupytext --to py:percent --output /tmp/draft.py m01_hello_pt2e/01_minimal_ptq.ipynb
 
-# percent .py → notebook，再執行一次把輸出寫進去
+# percent .py → notebook, then run it once more to write the outputs in
 uv run jupytext --to ipynb --output m01_hello_pt2e/01_minimal_ptq.ipynb \
   --update-metadata '{"kernelspec":{"name":"python3","display_name":"Python 3","language":"python"},"jupytext":null}' \
   /tmp/draft.py
 ```
 
-repo 裡不要留和 notebook 同名的 `.py`：同一個資料夾有同名的 `.py` 時，Quarto 會略過那本 `.ipynb`。
+Don't leave a `.py` with the same name as a notebook in the repo: when a folder has a same-named `.py`, Quarto skips that `.ipynb`.
 
-### 驗證
+### The shared TinyConvNet weights
 
-沒有另外的測試套件。notebook 裡的 `assert` 會檢查教材的每個主張，所以驗證就是重新執行所有 notebook
-（在 macOS arm64 的 CPU 上全部約 10 分鐘）：
+Training is not bit-reproducible across platforms (or even thread counts), but the numbers in the notebooks depend on the exact weights.
+So `common/tiny_net.pt` holds the weights of the trained `TinyConvNet` (epochs=20, seed=0; trained on macOS arm64), and `trained_tiny_net()` loads it instead of retraining.
+Every platform therefore quantizes the same model. To regenerate it (this changes the numbers in many notebooks, so rerun them afterwards):
+
+```bash
+uv run python tools/make_tiny_net_weights.py          # trains from scratch and writes common/tiny_net.pt
+uv run python tools/make_tiny_net_weights.py --check  # loads the file and prints check numbers
+```
+
+QAT training in M06 still starts from these weights but is not bit-reproducible, so those numbers can differ slightly between platforms.
+
+### Verification
+
+There is no separate test suite. The `assert`s inside the notebooks check every claim in the course, so verification means rerunning all the notebooks
+(about 10 minutes in total on a macOS arm64 CPU):
 
 ```bash
 uv run python check_env.py
 uv run jupyter nbconvert --to notebook --execute --inplace --ClearMetadataPreprocessor.enabled=True m*/*.ipynb
 ```
 
-再確認輸出裡沒有 error 或 stderr（torch 的 `W…` 警告會出現在 stderr），下面的指令應該什麼都不印：
+Then confirm there is no error or stderr in the outputs (torch's `W…` warnings show up in stderr); the command below should print nothing:
 
 ```bash
 uv run python -c "import json,glob; [print(p) for p in glob.glob('m*/*.ipynb') if any(o['output_type']=='error' or o.get('name')=='stderr' for c in json.load(open(p))['cells'] for o in c.get('outputs',[]))]"
 ```
 
-型別檢查用 pyright，要 0 error。notebook 先用上面的 jupytext 指令轉成 `.py` 放到 repo 外的資料夾再檢查；
-M10 的 notebook 會 `import vpu_quantizer`，檢查時要用 `pyrightconfig.json` 把 `m10_custom_backend/` 加進 `extraPaths`。
+Type checking uses pyright and must give 0 errors. First convert the notebooks to `.py` with the jupytext command above into a folder outside the repo, then check;
+the M10 notebooks `import vpu_quantizer`, so when checking, add `m10_custom_backend/` to `extraPaths` with a `pyrightconfig.json`.
 
 ```bash
-uvx pyright --pythonpath .venv/bin/python common/ <轉出的 .py 所在資料夾>
+uvx pyright --pythonpath .venv/bin/python common/ <folder holding the converted .py files>
 ```

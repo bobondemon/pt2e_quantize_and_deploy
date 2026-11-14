@@ -1,25 +1,29 @@
-# M07 — 後端部署總覽：Q/DQ 圖之後
+# M07 — Backend Deployment Overview: After the Q/DQ Graph
 
-從概覽開始讀，再依序打開 notebook。GitHub 上可以直接看到執行結果；要自己改參數再跑，見下方「在自己的電腦上執行」。
+> ### 🌐 **English** ｜ [繁體中文](README.zh-TW.md)
 
-這一章的數字與平台有關。notebook 裡存的輸出來自 macOS arm64、torch 2.14.0、沒有 mkldnn 的環境；在你的機器上執行時，表格下的說明會依實測印出。
+English notebooks: [../en/m07_representation_lowering/](../en/m07_representation_lowering/)
 
-| 檔案 | 內容 |
+Start with the overview, then open the notebooks in order. You can see the executed results directly on GitHub; to change parameters and run them yourself, see "Running on your own machine" below.
+
+The numbers in this chapter depend on the platform. The outputs stored in the notebooks come from macOS arm64, torch 2.14.0, an environment without mkldnn; when you run them on your machine, the notes under the tables are printed according to the measured results.
+
+| File | Contents |
 |---|---|
-| [00_overview.ipynb](00_overview.ipynb) | 概覽（M07～M10 的開端）：前半是後端部署共用的先備知識——推論框架、硬體擴充單位、kernel 函式庫的分層，三條路線，Quantizer 要配後端；後半是 Q/DQ 圖上的「dq → op → q」單元，reference representation、lowering、Inductor 各是什麼、彼此的關係，以及比較後端結果的規矩 |
-| [01_fp32_numeric_floor.ipynb](01_fp32_numeric_floor.ipynb) | M07-1：不量化、只換 kernel 時 fp32 輸出差多少；profiler 看 kernel；用 `torch.backends` 手動切換 |
-| [02_representation_and_lowering.ipynb](02_representation_and_lowering.ipynb) | M07-2：同一張 Q/DQ 圖經 reference representation、`lower_pt2e_quantized_to_x86`、`torch.compile` 各變成什麼 op |
+| [00_overview.ipynb](00_overview.ipynb) | Overview (the start of M07 to M10): the first half is background shared by backend deployment: the layers of inference framework, hardware extension unit, and kernel library, the three routes, and why the Quantizer must match the backend; the second half covers the "dq → op → q" units on the Q/DQ graph, what reference representation, lowering, and Inductor each are and how they relate, and the rules for comparing backend results |
+| [01_fp32_numeric_floor.ipynb](01_fp32_numeric_floor.ipynb) | M07-1: how much the fp32 output differs without quantization when only the kernel changes; seeing kernels with the profiler; switching by hand with `torch.backends` |
+| [02_representation_and_lowering.ipynb](02_representation_and_lowering.ipynb) | M07-2: what op the same Q/DQ graph becomes through reference representation, `lower_pt2e_quantized_to_x86`, and `torch.compile` |
 
-## 在自己的電腦上執行
+## Running on your own machine
 
-全專案共用一個 [uv](https://docs.astral.sh/uv/) 環境（Python 3.12，在 `.venv/`），graphviz 的子圖需要系統的 `dot` 執行檔。在專案根目錄執行：
+The whole project shares one [uv](https://docs.astral.sh/uv/) environment (Python 3.12, in `.venv/`); graphviz subgraphs need the system `dot` executable. From the project root:
 
 ```bash
-brew install graphviz          # Ubuntu：sudo apt install graphviz
-uv sync                        # 建立 .venv，全專案只需做一次
+brew install graphviz          # Ubuntu: sudo apt install graphviz
+uv sync                        # creates .venv; only needed once for the whole project
 uv run jupyter lab m07_representation_lowering/00_overview.ipynb
 ```
 
-最後一行用 `.venv` 的 Python 啟動 JupyterLab，並在瀏覽器打開本章的概覽。它只負責打開，不會自動執行：
-要逐格按 Shift+Enter，或選選單的 Run → Run All Cells。其他 notebook 從左側的檔案瀏覽器打開。
-也可以改用 VS Code 開 `.ipynb`，kernel 選 `.venv`。
+The last line launches JupyterLab with the `.venv` Python and opens this chapter's overview in the browser. It only opens it and does not run anything:
+press Shift+Enter cell by cell, or use the menu Run → Run All Cells. Open the other notebooks from the file browser on the left.
+You can also open the `.ipynb` in VS Code and pick `.venv` as the kernel.

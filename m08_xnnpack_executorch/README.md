@@ -1,28 +1,32 @@
-# M08 — XNNPACK／ExecuTorch：把 Q/DQ 圖變成 `.pte`
+# M08 — XNNPACK / ExecuTorch: Turning the Q/DQ Graph into a `.pte`
 
-從概覽開始讀，再依序打開 notebook。GitHub 上可以直接看到執行結果；要自己改參數再跑，見下方「在自己的電腦上執行」。
+> ### 🌐 **English** ｜ [繁體中文](README.zh-TW.md)
 
-這一章走 [M07 概覽](../m07_representation_lowering/00_overview.ipynb)的路線 A；ExecuTorch、XNNPACK 各在哪一層，先讀 M07 概覽的前半。
-數值與速度和平台有關。notebook 裡存的輸出來自 macOS arm64、torch 2.14.0、executorch 1.5.0；在你的機器上執行時，說明會依實測印出。
+English notebooks: [../en/m08_xnnpack_executorch/](../en/m08_xnnpack_executorch/)
 
-| 檔案 | 內容 |
+Start from the overview, then open the notebooks in order. You can see the execution results directly on GitHub; to change parameters and run it yourself, see "Running on your own machine" below.
+
+This chapter follows Route A of the [M07 overview](../m07_representation_lowering/00_overview.ipynb); for which layer ExecuTorch and XNNPACK each sit at, read the first half of the M07 overview.
+Numbers and speed depend on the platform. The outputs saved in the notebooks come from macOS arm64, torch 2.14.0, executorch 1.5.0; when you run them on your machine, the commentary is printed from what is actually measured.
+
+| File | Contents |
 |---|---|
-| [00_overview.ipynb](00_overview.ipynb) | 概覽：conv + relu 用原始 API 走完 PT2E → lowering → `.pte` → runtime；Edge dialect、partitioner、delegate、memory planning；lowering 時 q/dq 去哪了；和 Q/DQ 圖的數值差異 |
-| [01_executorch_vs_torchao_copy.ipynb](01_executorch_vs_torchao_copy.ipynb) | M08-1：兩份同名的 `XNNPACKQuantizer` 差在哪；static 與 dynamic 的規格；`set_module_name` 對 conv 不生效 |
-| [02_export_to_pte.ipynb](02_export_to_pte.ipynb) | M08-2：lowering 前後的圖、delegate 裡 XNNPACK 實際執行的 node、`.pte` 的大小、用 ExecuTorch runtime 執行、換 batch 為什麼失敗 |
-| [03_unsupported_ops.ipynb](03_unsupported_ops.ipynb) | M08-3：XNNPACK 不收的 op 把圖切成兩個 delegate，邊界上傳 fp32 |
-| [04_latency.ipynb](04_latency.ipynb) | M08-4：eager、Q/DQ 圖、fp32 `.pte`、int8 `.pte` 的 latency；收益分成換 runtime 與量化兩段 |
+| [00_overview.ipynb](00_overview.ipynb) | Overview: conv + relu through PT2E → lowering → `.pte` → runtime with the raw APIs; Edge dialect, partitioner, delegate, memory planning; where q/dq go during lowering; numerical differences from the Q/DQ graph |
+| [01_executorch_vs_torchao_copy.ipynb](01_executorch_vs_torchao_copy.ipynb) | M08-1: how the two same-named `XNNPACKQuantizer`s differ; the static and dynamic specs; `set_module_name` has no effect on conv |
+| [02_export_to_pte.ipynb](02_export_to_pte.ipynb) | M08-2: graphs before and after lowering, the nodes XNNPACK actually executes inside the delegate, `.pte` size, running with the ExecuTorch runtime, why changing the batch fails |
+| [03_unsupported_ops.ipynb](03_unsupported_ops.ipynb) | M08-3: an op XNNPACK does not take splits the graph into two delegates, and fp32 is passed across the boundary |
+| [04_latency.ipynb](04_latency.ipynb) | M08-4: latency of eager, the Q/DQ graph, the fp32 `.pte`, and the int8 `.pte`; the gain splits into switching runtime and quantizing |
 
-## 在自己的電腦上執行
+## Running on your own machine
 
-全專案共用一個 [uv](https://docs.astral.sh/uv/) 環境（Python 3.12，在 `.venv/`），graphviz 的子圖需要系統的 `dot` 執行檔。這一章另外需要 executorch，所以 `uv sync` 要加 `--group executorch`。在專案根目錄執行：
+The whole project shares one [uv](https://docs.astral.sh/uv/) environment (Python 3.12, in `.venv/`); graphviz subgraphs need the system `dot` executable. This chapter additionally needs executorch, so `uv sync` needs `--group executorch`. Run from the project root:
 
 ```bash
-brew install graphviz                  # Ubuntu：sudo apt install graphviz
-uv sync --group executorch             # 建立 .venv，並裝入 executorch
+brew install graphviz                  # Ubuntu: sudo apt install graphviz
+uv sync --group executorch             # create .venv and install executorch
 uv run jupyter lab m08_xnnpack_executorch/00_overview.ipynb
 ```
 
-最後一行用 `.venv` 的 Python 啟動 JupyterLab，並在瀏覽器打開本章的概覽。它只負責打開，不會自動執行：
-要逐格按 Shift+Enter，或選選單的 Run → Run All Cells。其他 notebook 從左側的檔案瀏覽器打開。
-也可以改用 VS Code 開 `.ipynb`，kernel 選 `.venv`。
+The last line starts JupyterLab with the `.venv` Python and opens this chapter's overview in the browser. It only opens it and does not run anything automatically:
+press Shift+Enter cell by cell, or use the menu Run → Run All Cells. Open the other notebooks from the file browser on the left.
+You can also open the `.ipynb` in VS Code and pick `.venv` as the kernel.

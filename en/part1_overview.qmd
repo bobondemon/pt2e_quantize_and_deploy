@@ -1,0 +1,131 @@
+---
+title: "Part 1 Overview | From an fp32 Model to the Q/DQ Graph (M01–M06)"
+---
+
+M00 captured the model as a graph and showed how to edit it. Part 1 (M01–M06) quantizes on that graph:
+the input is a trained fp32 model, and the output is the **Q/DQ graph** produced by `convert_pt2e`, plus the accuracy measured on that Q/DQ graph.
+
+The Q/DQ graph is the end point of Part 1 and the starting point of [Part 2](part2_overview.qmd).
+This page gives only the storyline and the division of labor; the definitions, formulas, and experiments are in each chapter's overview and notebooks.
+
+## Part 1 on one page
+
+PT2E has only a handful of API calls, and the six chapters each open up one piece:
+
+```text
+fp32 model
+  → torch.export        capture as a graph of ATen ops (M00)
+  → prepare             the Quantizer attaches annotations, then observers are inserted per annotation (M02, M03)
+  → calibrate or train  PTQ calibration computes scales; QAT trains the weights (M05, M06)
+  → convert_pt2e        observers become q/dq, weights are stored as int8 (M02)
+  → Q/DQ graph          handed to Part 2
+```
+
+For PTQ, prepare is `prepare_pt2e` (inserts observers); for QAT it is `prepare_qat_pt2e` (inserts fake quant).
+Conv + BN folding is not a separate step: PTQ folds right at the start of prepare, while QAT waits until convert (M04).
+
+## The storyline: three segments
+
+### Walk through it once (M01)
+
+| Chapter | Question | One-line answer |
+|---|---|---|
+| [M01](m01_hello_pt2e/00_overview.ipynb) | What does quantization have to decide? | Which tensors to quantize, the scale / zero point of each tensor, and how to hand it to the backend |
+| | Where does PT2E answer them? | In order: the Quantizer's annotations, the observers' calibration, and the q/dq produced by convert |
+
+M01 also makes one thing clear up front: the ops in a Q/DQ graph are still fp32, only simulating int8 numerically, so **it does not get faster**.
+
+### Open three black boxes (M02–M04)
+
+| Chapter | Question | One-line answer |
+|---|---|---|
+| [M02](m02_observer_fakequant/00_overview.ipynb) | What do prepare and convert do to the graph? | Just edit it: insert observers, then replace them with q/dq and pre-quantize the weights |
+| [M03](m03_quantizer_api/00_overview.ipynb) | Who decides where observers go? | The annotations the Quantizer puts on nodes; prepare itself doesn't know what should be quantized |
+| [M04](m04_conv_bn_folding/00_overview.ipynb) | How is BN folded into conv? | PTQ folds at prepare; QAT keeps BN for training and folds at convert |
+
+These three chapters take apart the same flow: M02 looks at "how to insert", M03 at "where to insert", and M04 at "what the graph was changed into before inserting".
+
+### Apply it to a trained model (M05, M06)
+
+| Chapter | Question | One-line answer |
+|---|---|---|
+| [M05](m05_ptq_pipeline/00_overview.ipynb) | Accuracy dropped after PTQ — where to look? | Output SQNR → change the calibration data → per-layer SQNR → rule out candidates and remeasure |
+| [M06](m06_qat_pipeline/00_overview.ipynb) | When PTQ is not enough, how does QAT train? | Train the fake-quant graph with STE, and make sure the graph at training time equals the graph after convert |
+
+M05 and M06 use the same trained `TinyConvNet`: at int8, PTQ already sits right on fp32, and at int4 QAT clearly wins back the accuracy PTQ lost (M06-4).
+
+## Rules that run through Part 1
+
+| Rule | Where |
+|---|---|
+| The Q/DQ graph still computes in fp32, only simulating int8; it does not get faster | M01, M02-3 |
+| prepare / convert don't know the backend; where and how to quantize is decided entirely by the Quantizer | M03 |
+| After changing the Quantizer, version, or config (e.g. `set_module_name`), draw the annotations first, and after convert confirm the q/dq were really inserted; a missed annotation raises no error | M03-2, M03-7, M08-1 |
+| PTQ and QAT fold BN at different steps; the graph after convert is the same | M04 |
+| PTQ uses SQNR against the fp32 output; per-layer scores are clues that must be confirmed by experiment | M05 |
+| The QAT fake-quant graph (after freezing) and the convert graph must produce the same output | M06-3 |
+| QAT uses test loss, with a baseline of fp32 retrained with the same recipe | M06-4 |
+
+The last question is left to Part 2: can the accuracy measured on the Q/DQ graph represent the accuracy after deployment?
+The answer is that it can serve as a proxy but is not guaranteed to be bit-identical: the backend uses real integer kernels and rounds in different places.
+In M08's measurements the difference is mostly 1 output LSB, with almost the same SQNR against fp32.
+
+## The role in Part 1: the algorithm engineer
+
+In practice, Part 1 is usually owned by the **algorithm engineer**: build a model for the problem, train it, quantize it, and deliver the Q/DQ graph.
+But the quantization rules are not set by the algorithm engineer: the Quantizer is designed around the backend's kernels (M03, the [M07 overview](m07_representation_lowering/00_overview.ipynb) "Before Quantizing, Choose the Backend").
+So this role's work starts from "getting information from the backend" and ends with "delivering the Q/DQ graph and the evidence".
+How the two roles collaborate is in the [home page](index.qmd), "Two roles".
+
+### Before starting: what to get from the backend deployment engineer
+
+Ideally get these **before designing the model**, not just before quantizing: the op list affects the choice of architecture.
+
+| Item | Why it is needed | Related chapters |
+|---|---|---|
+| The target platform's Quantizer (PTQ and QAT configs) | Where and how to quantize must match the backend's kernels | M03, M07 overview |
+| The list of ops with int8 support | Ops outside the list stay in fp32 and split the graph into several segments | M08-3, M10-3 |
+| Shape and bit-width constraints | For example, a backend that only accepts static shapes raises an error at prepare | M10-1 |
+| A verified QAT config | XNNPACK's default fused fake quant makes training graph ≠ convert graph | M06-3 |
+
+### Duties
+
+| Task | How | Chapter |
+|---|---|---|
+| Build and train the fp32 model | Prefer ops on the list; keep the fp32 model as the baseline | — |
+| export | Static or dynamic batch, depending on the backend | M00 |
+| PTQ | Use representative calibration data and look at the variance of the result | M05-1, M05-2 |
+| Accuracy debugging | Find candidates with per-layer SQNR, then confirm with ablation experiments | M05-3, M05-4 |
+| QAT | Only when PTQ is not enough; before evaluating, switch BN to eval and turn off observers | M06 |
+| Special structures | Weights computed from other parameters, like weight_norm, are replaced by constants before folding BN | M05-5, M06-6 |
+| Confirm quantization coverage | Draw the annotations and the Q/DQ nodes yourself and check that every op you want quantized has them; a quantizer that misses an annotation raises no error | M03-2, M08-1 |
+| Confirm the Q/DQ graph's accuracy | The last number before delivery, and also the backend's comparison baseline | M05, M06 |
+
+### What to deliver to the backend deployment engineer
+
+Delivering only the Q/DQ graph is not enough. The backend must be able to reproduce, compare, and debug:
+
+| Deliverable | What the backend uses it for |
+|---|---|
+| Q/DQ graph | Input to lowering |
+| fp32 model | Baseline for numeric comparison, to find where an accuracy gap comes from |
+| Example inputs and shapes | Re-export, memory planning |
+| Calibration and evaluation data | Rerun evaluation on the device; convert again if needed |
+| Accuracy report on the Q/DQ graph | What the on-device result is compared against |
+
+The Q/DQ graph can be saved as a `.pt2` with `torch.export.save`.
+Tried in the author's environment: the Q/DQ graph used in M09, saved and then loaded with `torch.export.load`, gives bit-identical output,
+and the loaded graph can be exported directly to QDQ ONNX or lowered to an ExecuTorch `.pte`.
+
+Some routes need convert options that differ from the defaults, so it is best to keep the quantization flow rerunnable:
+for example, OpenVINO needs `convert_pt2e(..., fold_quantize=False)` to convert (route C in the M07 overview).
+
+## Further reading
+
+Part 1 covers only the mechanism of PT2E: where to quantize, how scales are computed, and how to train. The quantization algorithms themselves (AdaRound, OCTAV, EWGS, etc.) are out of scope; the blog post "[Quantization technique roadmap](https://bobondemon.github.io/2024/02/17/%E9%87%8F%E5%8C%96%E6%8A%80%E8%A1%93%E8%B7%AF%E7%B7%9A/)" (in Chinese) organizes them into a map.
+
+Outlier handling commonly used for LLMs, such as [SmoothQuant](https://bobondemon.github.io/2023/12/28/SmoothQuant-%E7%AD%86%E8%A8%98/), [AWQ](https://bobondemon.github.io/2023/12/28/AWQ-%E7%AD%86%E8%A8%98/), [random rotation](https://bobondemon.github.io/2026/04/29/%E9%9A%A8%E6%A9%9F%E6%97%8B%E8%BD%89%E7%9A%84%E9%87%8F%E5%8C%96%E9%AD%94%E6%B3%95/), and [SpinQuant](https://bobondemon.github.io/2026/05/14/%E8%81%8A%E8%81%8A-SpinQuant/) (blog notes, in Chinese), modifies the fp32 model itself (an equivalent scaling or rotation); under this course's division of labor, it is the algorithm engineer's work before export.
+
+## Next
+
+[Part 2 overview](part2_overview.qmd): who gets the Q/DQ graph, how it becomes int8 kernels, and how the backend writes hardware constraints into a Quantizer and hands it back to Part 1.

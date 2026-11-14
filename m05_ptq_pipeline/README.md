@@ -1,26 +1,30 @@
-# M05 — PTQ 的精度除錯
+# M05 — Debugging PTQ Accuracy
 
-從概覽開始讀，再依序打開 notebook（M05-5 是選讀）。GitHub 上可以直接看到執行結果；要自己改參數再跑，見下方「在自己的電腦上執行」。
+> ### 🌐 **English** ｜ [繁體中文](README.zh-TW.md)
 
-| 檔案 | 內容 |
+English notebooks: [../en/m05_ptq_pipeline/](../en/m05_ptq_pipeline/)
+
+Start with the overview, then open the notebooks in order (M05-5 is optional). You can view the executed results directly on GitHub; to change parameters and rerun them yourself, see "Running on Your Own Machine" below.
+
+| File | Content |
 |---|---|
-| [00_overview.ipynb](00_overview.ipynb) | 概覽：為什麼需要一套查問題的順序；輸出 SQNR、逐層 SQNR、mixed precision 的定義 |
-| [01_ptq_full.ipynb](01_ptq_full.ipynb) | M05-1：訓練好的模型做 PTQ；accuracy 與輸出 SQNR 哪個看得出量化誤差；per-channel 與 per-tensor |
-| [02_calibration_study.ipynb](02_calibration_study.ipynb) | M05-2：校準樣本數與結果的波動；校準時 BN 會不會影響結果 |
-| [03_layerwise_sqnr.ipynb](03_layerwise_sqnr.ipynb) | M05-3：用 numeric debugger 看逐層 SQNR；怎麼讀；參考圖用哪一張 |
-| [04_mixed_precision.ipynb](04_mixed_precision.ipynb) | M05-4：排除某些 module 的 Quantizer；排除哪裡真的有用；誤差怎麼累積 |
-| [05_weight_norm_ptq.ipynb](05_weight_norm_ptq.ipynb) | M05-5（選讀）：`weight_norm` export 後變成什麼；有 BN 時為什麼報錯；兩個解法 |
+| [00_overview.ipynb](00_overview.ipynb) | Overview: why we need an order of investigation; definitions of output SQNR, layerwise SQNR, and mixed precision |
+| [01_ptq_full.ipynb](01_ptq_full.ipynb) | M05-1: PTQ on a trained model; which of accuracy and output SQNR shows quantization error; per-channel vs per-tensor |
+| [02_calibration_study.ipynb](02_calibration_study.ipynb) | M05-2: number of calibration samples and the spread of results; whether BN affects results during calibration |
+| [03_layerwise_sqnr.ipynb](03_layerwise_sqnr.ipynb) | M05-3: layerwise SQNR with the numeric debugger; how to read it; which graph to use as the reference |
+| [04_mixed_precision.ipynb](04_mixed_precision.ipynb) | M05-4: excluding some modules from the Quantizer; which exclusions actually help; how error accumulates |
+| [05_weight_norm_ptq.ipynb](05_weight_norm_ptq.ipynb) | M05-5 (optional): what `weight_norm` becomes after export; why it errors with BN; two fixes |
 
-## 在自己的電腦上執行
+## Running on Your Own Machine
 
-全專案共用一個 [uv](https://docs.astral.sh/uv/) 環境（Python 3.12，在 `.venv/`），graphviz 的子圖需要系統的 `dot` 執行檔。在專案根目錄執行：
+The whole project shares one [uv](https://docs.astral.sh/uv/) environment (Python 3.12, in `.venv/`), and graphviz subgraphs need the system `dot` executable. From the project root:
 
 ```bash
-brew install graphviz          # Ubuntu：sudo apt install graphviz
-uv sync                        # 建立 .venv，全專案只需做一次
+brew install graphviz          # Ubuntu: sudo apt install graphviz
+uv sync                        # creates .venv; only needed once for the whole project
 uv run jupyter lab m05_ptq_pipeline/00_overview.ipynb
 ```
 
-最後一行用 `.venv` 的 Python 啟動 JupyterLab，並在瀏覽器打開本章的概覽。它只負責打開，不會自動執行：
-要逐格按 Shift+Enter，或選選單的 Run → Run All Cells。其他 notebook 從左側的檔案瀏覽器打開。
-也可以改用 VS Code 開 `.ipynb`，kernel 選 `.venv`。
+The last line starts JupyterLab with the `.venv` Python and opens this chapter's overview in the browser. It only opens it and does not run anything automatically:
+press Shift+Enter cell by cell, or choose Run → Run All Cells from the menu. Open the other notebooks from the file browser on the left.
+You can also open the `.ipynb` in VS Code and pick `.venv` as the kernel.

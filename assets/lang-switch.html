@@ -1,0 +1,62 @@
+<!-- 語言切換 / Language switcher（zh 與 en 兩個 Quarto 專案共用；en/lang-switch.html 是這份的複本，改動請同步） -->
+<style>
+  .navbar a.lang-switch {
+    border: 2px solid currentColor;
+    border-radius: 999px;
+    padding: .15rem .9rem !important;
+    margin-left: .5rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, .18);
+  }
+  .navbar a.lang-switch:hover { background: rgba(255, 255, 255, .35); }
+  .sidebar-tools-main a.lang-switch { font-weight: 700; font-size: .9rem; }
+  /* 窄螢幕：導覽列收進選單，改用固定在右下角的浮動按鈕，保持顯眼 */
+  .lang-float { display: none; }
+  @media (max-width: 991.98px) {
+    .lang-float {
+      display: block; position: fixed; right: 14px; bottom: 14px; z-index: 1050;
+      padding: .45rem 1rem; border-radius: 999px; font-weight: 700; font-size: .95rem;
+      background: #2780e3; color: #fff !important; text-decoration: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+    }
+  }
+  .navbar-brand-container { max-width: 70%; }
+  .navbar-title { font-size: .95rem; white-space: normal; line-height: 1.2; }
+</style>
+<script>
+  // 以 site_libs 的位置推算網站根目錄，再在 <root> 與 <root>en/ 之間對應同一頁。
+  document.addEventListener("DOMContentLoaded", function () {
+    try {
+      var probe = document.querySelector('script[src*="site_libs/"], link[href*="site_libs/"]');
+      if (!probe) return;
+      var u = new URL(probe.getAttribute("src") || probe.getAttribute("href"), location.href);
+      var root = u.href.slice(0, u.href.indexOf("site_libs/"));
+      var isEn = document.documentElement.lang.toLowerCase().indexOf("en") === 0;
+      var rel = location.href.slice(root.length).split("#")[0].split("?")[0];
+      if (rel === "") rel = "index.html";
+      var zhRoot = isEn ? root.replace(/en\/$/, "") : root;
+      var enRoot = isEn ? root : root + "en/";
+      var zhUrl = zhRoot + rel, enUrl = enRoot + rel;
+      document.querySelectorAll(".lang-mark").forEach(function (m) {
+        var a = m.closest("a");
+        if (a) { a.classList.add("lang-switch"); if (a.parentElement) a.parentElement.classList.add("lang-switch-item"); }
+      });
+      document.querySelectorAll("a.lang-switch").forEach(function (a) {
+        a.setAttribute("href", isEn ? zhUrl : enUrl);
+        a.addEventListener("click", function () {
+          try { localStorage.setItem("lang", isEn ? "zh" : "en"); } catch (e) {}
+        });
+      });
+      var fl = document.createElement("a");
+      fl.className = "lang-float"; fl.href = isEn ? zhUrl : enUrl;
+      fl.textContent = isEn ? "🌐 中文" : "🌐 English";
+      fl.addEventListener("click", function () { try { localStorage.setItem("lang", isEn ? "zh" : "en"); } catch (e) {} });
+      document.body.appendChild(fl);
+      [["zh-Hant", zhUrl], ["en", enUrl]].forEach(function (p) {
+        var l = document.createElement("link");
+        l.rel = "alternate"; l.hreflang = p[0]; l.href = p[1];
+        document.head.appendChild(l);
+      });
+    } catch (e) {}
+  });
+</script>

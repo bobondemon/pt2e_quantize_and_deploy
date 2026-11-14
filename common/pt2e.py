@@ -1,7 +1,7 @@
-"""PT2E API 的單一入口（compat layer）。
+"""Single entry point for the PT2E API (compat layer).
 
-PT2E 的 API 這兩年搬過家：`torch.ao.quantization.*` -> `torchao.quantization.pt2e.*`。
-全專案只在這裡 import，以後 API 再搬只要改這一個檔案。
+The PT2E API has moved house over the past two years: `torch.ao.quantization.*` -> `torchao.quantization.pt2e.*`.
+The whole project imports it only here, so if the API moves again only this one file needs to change.
 """
 
 import logging
@@ -12,30 +12,30 @@ import torch
 
 
 def _quiet_noisy_dependency_loggers():
-    """關掉 torch/torchao 匯入時會出現、但不影響 demo 的已知訊息。"""
+    """Silence known messages that appear while importing torch/torchao but do not affect the demos."""
     logging.getLogger(
         "torch.distributed.elastic.multiprocessing.redirects"
     ).setLevel(logging.ERROR)
     logging.getLogger("torch.utils._pytree").setLevel(logging.ERROR)
-    # Linux（例如 Colab）沒有 triton 時，torchao 匯入會印「Detected no triton」；本教材只用 CPU，用不到。
+    # On Linux (e.g. Colab) without triton, importing torchao prints "Detected no triton"; this course only uses CPU, so it is not needed.
     logging.getLogger("torchao.kernel.intmm").setLevel(logging.ERROR)
 
 
-# 這兩則訊息會在下方 import torchao 時產生，必須先套用 filter；
-# 等各支 demo 呼叫 quiet() 已經太晚。
+# These two messages are produced when torchao is imported below, so the filter must be applied first;
+# by the time each demo calls quiet() it is too late.
 _quiet_noisy_dependency_loggers()
 
-# --- 主流程三兄弟 -------------------------------------------------------------
+# --- The three main-flow functions -------------------------------------------------------------
 from torchao.quantization.pt2e.quantize_pt2e import (  # noqa: F401
     convert_pt2e,
     prepare_pt2e,
     prepare_qat_pt2e,
 )
 
-# --- convert_pt2e 內部的 pass（M02-3 手動重做 convert 時用）--------------------------
+# --- Internal pass of convert_pt2e (used when M02-3 redoes convert by hand) --------------------------
 from torchao.quantization.pt2e.quantizer.duplicate_dq_pass import DuplicateDQPass  # noqa: F401
 
-# --- annotation 用的 spec 們 ---------------------------------------------------
+# --- Specs used for annotation ---------------------------------------------------
 from torchao.quantization.pt2e.quantizer import (  # noqa: F401
     ComposableQuantizer,
     DerivedQuantizationSpec,
@@ -69,7 +69,7 @@ from torchao.quantization.pt2e import (  # noqa: F401
     move_exported_model_to_train,
 )
 
-# --- QAT 的開關（M02-2、M06）：對 model.apply(...) 用 ------------------------------------
+# --- QAT switches (M02-2, M06): used with model.apply(...) ------------------------------------
 from torchao.quantization.pt2e import (  # noqa: F401
     disable_fake_quant,
     disable_observer,
@@ -79,33 +79,33 @@ from torchao.quantization.pt2e import (  # noqa: F401
     enable_range_learning,
 )
 
-# --- 數值除錯（M05）：逐 node 比較量化前後的輸出 ---------------------------------------
+# --- Numeric debugging (M05): compare outputs before and after quantization node by node ---------------------------------------
 from torchao.quantization.pt2e import (  # noqa: F401
     compare_results,
     extract_results_from_loggers,
     prepare_for_propagation_comparison,
 )
 
-# --- 後端提供的 Quantizer（含 global / module / op type 設定 API）--------------------
+# --- Quantizer provided by a backend (with global / module / op type config API) --------------------
 from torchao.quantization.pt2e.quantizer.x86_inductor_quantizer import (  # noqa: E402,F401
     X86InductorQuantizer,
     get_default_x86_inductor_quantization_config,
 )
 
-# --- Lowering（M07）：把 Q/DQ 圖交給 x86 Inductor 的 int8 pattern -------------------------
+# --- Lowering (M07): hand the Q/DQ graph to the x86 Inductor int8 pattern -------------------------
 from torchao.quantization.pt2e.lowering import lower_pt2e_quantized_to_x86  # noqa: E402,F401
 
 ANNOTATION_KEY = "quantization_annotation"
 
 
 def export_module(model, example_inputs, train=False, dynamic_batch=True):
-    """把 nn.Module export 成可以餵給 prepare_pt2e 的 GraphModule。
+    """Export an nn.Module into a GraphModule that can be fed to prepare_pt2e.
 
-    train=True     : 用 training IR（QAT 需要，BN 才會是 training 版本的 op）。
-    dynamic_batch  : 讓 batch 維度是動態的。export 預設把所有 shape 寫死，
-                     校準時餵不同 batch size 會直接 assert failed。
-                     注意：edge 後端（ExecuTorch/多數 NPU）反而要求 static shape，
-                     M08 會刻意關掉這個選項（M08-2）。
+    train=True     : use the training IR (needed for QAT, so BN becomes the training version of the op).
+    dynamic_batch  : make the batch dimension dynamic. export fixes every shape by default,
+                     so feeding a different batch size during calibration fails an assert outright.
+                     Note: edge backends (ExecuTorch / most NPUs) actually require static shapes,
+                     so M08 deliberately turns this option off (M08-2).
     """
     from torch.export import Dim, export
 
@@ -117,17 +117,17 @@ def export_module(model, example_inputs, train=False, dynamic_batch=True):
 
 
 def get_xnnpack_api(source="torchao") -> tuple[Any, Any, str]:
-    """取得 (XNNPACKQuantizer 類別, get_symmetric_quantization_config 函式, 來源字串)。
+    """Get (XNNPACKQuantizer class, get_symmetric_quantization_config function, source string).
 
-    PT2E 有兩份同名的 XNNPACKQuantizer，程式碼幾乎相同、行為有差（M08-1）：
-      source="torchao"    : torchao 測試版，`torchao.testing.pt2e._xnnpack_quantizer`。
-                            torchao 為自己的單元測試留的拷貝（會噴 deprecated warning，這裡壓掉）。
-                            M01～M07 一律用這份，結果才不會隨「有沒有裝 executorch」改變；
-                            它的 cat annotator 在 torch 2.14 靜默失效，接在 cat 後的 max_pool2d 跟著沒標（M01-2、M08-1）。
-      source="executorch" : executorch 版，`executorch.backends.xnnpack.quantizer.xnnpack_quantizer`。
-                            ExecuTorch 的 XNNPACK 後端附的 quantizer，要匯出 .pte 就用這份（M08）。
-                            需要 `uv sync --group executorch`。
-    兩份的 QuantizationConfig 是不同類別，回傳型別標成 Any，讓呼叫端不必分兩種型別。
+    PT2E has two XNNPACKQuantizers with the same name; the code is nearly identical but the behavior differs (M08-1):
+      source="torchao"    : the torchao test copy, `torchao.testing.pt2e._xnnpack_quantizer`.
+                            A copy torchao keeps for its own unit tests (it emits a deprecated warning, which is suppressed here).
+                            M01 to M07 always use this one so results do not change depending on whether executorch is installed;
+                            its cat annotator silently fails on torch 2.14, so the max_pool2d after cat goes unannotated too (M01-2, M08-1).
+      source="executorch" : the executorch copy, `executorch.backends.xnnpack.quantizer.xnnpack_quantizer`.
+                            The quantizer shipped with ExecuTorch's XNNPACK backend; use this one to export a .pte (M08).
+                            Requires `uv sync --group executorch`.
+    The two QuantizationConfig classes are different types, so the return type is annotated as Any to spare callers from handling two types.
     """
     if source == "executorch":
         from executorch.backends.xnnpack.quantizer.xnnpack_quantizer import (  # pyright: ignore[reportMissingImports]
@@ -137,7 +137,7 @@ def get_xnnpack_api(source="torchao") -> tuple[Any, Any, str]:
 
         return XNNPACKQuantizer, get_symmetric_quantization_config, "executorch"
     if source != "torchao":
-        raise ValueError(f"source 只能是 'torchao' 或 'executorch'，收到 {source!r}")
+        raise ValueError(f"source must be 'torchao' or 'executorch', got {source!r}")
     from torchao.testing.pt2e._xnnpack_quantizer import (  # type: ignore
         XNNPACKQuantizer,
         get_symmetric_quantization_config,
@@ -147,7 +147,7 @@ def get_xnnpack_api(source="torchao") -> tuple[Any, Any, str]:
 
 
 def get_xnnpack_quantizer(source="torchao", /, **config_kwargs):
-    """取得已 set_global 的 XNNPACKQuantizer。回傳 (quantizer, source_str)。source 見 get_xnnpack_api()。"""
+    """Get an XNNPACKQuantizer that already has set_global applied. Returns (quantizer, source_str). See get_xnnpack_api() for source."""
     quantizer_cls, config_fn, src = get_xnnpack_api(source)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message=".*deprecated.*")
@@ -156,11 +156,11 @@ def get_xnnpack_quantizer(source="torchao", /, **config_kwargs):
 
 
 def quiet():
-    """把跑 demo 時吵雜但無害的 warning 關掉。"""
+    """Silence warnings that are noisy but harmless when running demos."""
     _quiet_noisy_dependency_loggers()
     warnings.filterwarnings("ignore", category=UserWarning)
     warnings.filterwarnings("ignore", category=FutureWarning)
-    # 等同 torch._logging.set_logs(dynamo=40, inductor=40)（那是私有 API，也會被 pyright 擋），
-    # 實測兩者只差在這兩個 logger 的 level，所以直接用標準 logging 設定
+    # Equivalent to torch._logging.set_logs(dynamo=40, inductor=40) (that is a private API and pyright rejects it too);
+    # in practice the two differ only in the level of these two loggers, so standard logging is used directly
     for name in ("torch._dynamo", "torch._inductor"):
         logging.getLogger(name).setLevel(logging.ERROR)

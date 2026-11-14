@@ -1,7 +1,7 @@
-"""M06 各支腳本共用的 QAT 設定與訓練迴圈。
+"""QAT setup and training loop shared by the M06 scripts.
 
-M06-1 把訓練迴圈逐行寫在 notebook 裡；之後的 notebook 改用這裡的 `train_qat`，內容相同。
-M06-3 說明為什麼 weight 的 fake quant 預設不用 `FusedMovingAvgObsFakeQuantize`。
+M06-1 writes the training loop out line by line in the notebook; later notebooks use `train_qat` from here instead, with the same content.
+M06-3 explains why the weight fake quant does not use `FusedMovingAvgObsFakeQuantize` by default.
 """
 
 from typing import Any
@@ -22,14 +22,14 @@ from common.pt2e import (
     move_exported_model_to_train,
 )
 
-EPS = 2**-12  # 與 XNNPACKQuantizer 的設定一致
+EPS = 2**-12  # matches the XNNPACKQuantizer setting
 
-# int4：activation [-8, 7]、weight [-7, 7]（對稱）。XNNPACK 的 config 函式接受這四個參數，dtype 仍是 int8 容器。
+# int4: activation [-8, 7], weight [-7, 7] (symmetric). XNNPACK's config function accepts these four parameters; dtype is still an int8 container.
 INT4_RANGE = dict(act_qmin=-8, act_qmax=7, weight_qmin=-7, weight_qmax=7)
 
 
 def _respec(spec, ctr, **extra):
-    """保留 spec 的 dtype／範圍／qscheme，只換掉 observer_or_fake_quant_ctr。"""
+    """Keep the spec's dtype / range / qscheme and replace only observer_or_fake_quant_ctr."""
     kwargs = dict(dtype=spec.dtype, quant_min=spec.quant_min, quant_max=spec.quant_max, qscheme=spec.qscheme,
                   observer_or_fake_quant_ctr=ctr.with_args(eps=EPS, **extra))
     if spec.ch_axis is not None:
@@ -38,13 +38,13 @@ def _respec(spec, ctr, **extra):
 
 
 def qat_quantizer(bits=8, weight_fq="plain", act_fq="fused", grad_scaling=False):
-    """XNNPACK 的 QAT quantizer（per-channel weight），可換 fake quant 的種類與位元數。
+    """XNNPACK's QAT quantizer (per-channel weight), with a choice of fake-quant type and bit width.
 
-    bits      : 8 或 4（4 = 用 INT4_RANGE 縮小整數範圍）。
-    weight_fq : "plain"     非 fused 的 FakeQuantize（預設；與 convert 一致，M06-3）
-                "fused"     XNNPACK 預設的 FusedMovingAvgObsFakeQuantize（per-channel symmetric 與 convert 不一致）
-                "learnable" LearnableFakeQuantize（M06-5）
-    act_fq    : "fused"（預設，per-tensor affine 與 convert 公式一致，scale 可差 1 ULP，見 M06-3 C）或 "learnable"。
+    bits      : 8 or 4 (4 = shrink the integer range with INT4_RANGE).
+    weight_fq : "plain"     non-fused FakeQuantize (default; consistent with convert, M06-3)
+                "fused"     XNNPACK's default FusedMovingAvgObsFakeQuantize (per-channel symmetric is inconsistent with convert)
+                "learnable" LearnableFakeQuantize (M06-5)
+    act_fq    : "fused" (default; per-tensor affine matches the convert formula, scale may differ by 1 ULP, see M06-3 C) or "learnable".
     """
     kw: dict[str, Any] = dict(is_per_channel=True, is_qat=True)
     if bits == 4:
@@ -60,27 +60,27 @@ def qat_quantizer(bits=8, weight_fq="plain", act_fq="fused", grad_scaling=False)
                          ch_axis=0, use_grad_scaling=grad_scaling)
     if act_fq == "learnable":
         act = _respec(act, LearnableFakeQuantize, observer=MovingAverageMinMaxObserver, use_grad_scaling=grad_scaling)
-    # 用 cfg 自己的類別重建：executorch 版與 torchao 測試版的 QuantizationConfig 是兩個同形的 dataclass
+    # Rebuild with cfg's own class: the executorch and torchao-test QuantizationConfig are two dataclasses of the same shape
     return quantizer.set_global(type(cfg)(act, act, weight, None, is_qat=True))
 
 
 def make_schedule(observer_off_at=None, bn_eval_at=None):
-    """回傳給 train_qat 的 on_step(step, model)：到了指定 step 就凍結 observer／把 BN 切到 eval。"""
+    """Return an on_step(step, model) for train_qat: at the given step, freeze the observers / switch BN to eval."""
 
     def on_step(step, model):
         if observer_off_at is not None and step == observer_off_at:
             model.apply(disable_observer)
         if bn_eval_at is not None and step >= bn_eval_at:
-            move_exported_model_to_eval(model)  # 每個 epoch 開頭會被切回 train，所以要持續壓住
+            move_exported_model_to_eval(model)  # It is switched back to train at the start of every epoch, so it must be held down continuously
 
     return on_step
 
 
 def clamp_learnable_scales(model, eps=EPS):
-    """把 LearnableFakeQuantize 學出來的 scale 夾回正數。
+    """Clamp the scales learned by LearnableFakeQuantize back to positive values.
 
-    torchao 只在 calculate_qparams()（convert 時）才 clamp；訓練時梯度可以把 scale 推過 0，forward 照常
-    （round(x/s)·s 不在乎 s 的正負），convert 卻會把它夾成 eps，訓練圖與部署圖就不一致了（M06-5）。
+    torchao only clamps in calculate_qparams() (at convert time); during training the gradient can push scale past 0 and forward still works
+    (round(x/s)·s does not care about the sign of s), but convert clamps it to eps, so the training graph and the deployed graph disagree (M06-5).
     """
     for m in model.modules():
         if isinstance(m, LearnableFakeQuantize) and m.scale is not None:
@@ -88,20 +88,20 @@ def clamp_learnable_scales(model, eps=EPS):
 
 
 def train_qat(prepared, epochs=5, lr=1e-3, on_step=None, seed=1, qparams_lr=None, log=None, clamp_scale=True):
-    """QAT 訓練迴圈（與 M06-1 逐行相同）。回傳 prepared 本身（已原地訓練，最後處於 eval 模式）。
+    """QAT training loop (identical to M06-1 line by line). Returns prepared itself (trained in place, left in eval mode at the end).
 
-    on_step(step, model) 在每個 step 的 forward 之前呼叫，排程用。
-    qparams_lr : LearnableFakeQuantize 的 scale／zero_point 另給 lr（None = 與 weight 相同）。
-    log        : 可選的 callback log(step, model)，每個 step 結束後呼叫（M06-5 用來記 scale 軌跡）。
-    clamp_scale: 每步更新後把 LearnableFakeQuantize 的 scale 夾回正數（M06-5 示範關掉會怎樣）。
+    on_step(step, model) is called before each step's forward, for scheduling.
+    qparams_lr : a separate lr for LearnableFakeQuantize's scale / zero_point (None = same as the weights).
+    log        : optional callback log(step, model), called at the end of every step (M06-5 uses it to record the scale trajectory).
+    clamp_scale: after every update, clamp LearnableFakeQuantize's scale back to positive (M06-5 shows what happens when this is turned off).
     """
     torch.manual_seed(seed)
     loader = make_loader(n=1024, seed=1)
     lossf = torch.nn.CrossEntropyLoss()
-    # LearnableFakeQuantize 採 lazy initialization：建構時 scale／zero_point 是 None，
-    # 第一次 forward 才根據 observer 統計建立成 nn.Parameter。optimizer 只記住建立當下
-    # 已存在的 Parameter，不會自動收進之後新增的參數，所以必須先 forward 再建 optimizer。
-    # 這次 forward 只為初始化 qparams，不需要建立 autograd graph。
+    # LearnableFakeQuantize uses lazy initialization: scale / zero_point are None at construction and
+    # only become nn.Parameter (built from observer statistics) on the first forward. The optimizer only remembers the
+    # Parameters that exist when it is created and does not pick up ones added later, so forward must run before building the optimizer.
+    # This forward only initializes the qparams, so no autograd graph is needed.
     with torch.no_grad():
         prepared(*example_inputs())
     if qparams_lr is None:
@@ -113,7 +113,7 @@ def train_qat(prepared, epochs=5, lr=1e-3, on_step=None, seed=1, qparams_lr=None
         opt = torch.optim.SGD(groups, lr=lr, momentum=0.9)
     step = 0
     for _ in range(epochs):
-        move_exported_model_to_train(prepared)  # export 後的圖沒有 .train()：BN 要用這個切
+        move_exported_model_to_train(prepared)  # graphs after export have no .train(): use this to switch BN
         for x, y in loader:
             if on_step is not None:
                 on_step(step, prepared)
@@ -130,7 +130,7 @@ def train_qat(prepared, epochs=5, lr=1e-3, on_step=None, seed=1, qparams_lr=None
 
 
 def freeze_for_eval(prepared):
-    """評估或 convert 前的固定動作：BN 用 running stats、observer 不再更新（M06-2）。"""
+    """Fixed steps before evaluation or convert: BN uses running stats and observers stop updating (M06-2)."""
     move_exported_model_to_eval(prepared)
     prepared.apply(disable_observer)
     return prepared

@@ -1,24 +1,28 @@
-# M02 — observer 與 fake quant
+# M02 — Observers and Fake Quant
 
-從概覽開始讀，再依序打開三本 notebook。GitHub 上可以直接看到執行結果；要自己改參數再跑，見下方「在自己的電腦上執行」。
+> ### 🌐 **English** ｜ [繁體中文](README.zh-TW.md)
 
-| 檔案 | 內容 |
+Start with the overview, then open the three notebooks in order. GitHub shows the executed results directly; to change parameters and run them yourself, see "Running on Your Own Machine" below.
+
+English notebooks: [../en/m02_observer_fakequant/](../en/m02_observer_fakequant/)
+
+| File | Contents |
 |---|---|
-| [00_overview.ipynb](00_overview.ipynb) | 概覽：把 prepare 與 convert 拆開，全部手做一次；observer、FakeQuantize、convert 的步驟 |
-| [01_observer_zoo.ipynb](01_observer_zoo.ipynb) | M02-1：symmetric 與 affine、MinMax／Histogram／MovingAverage 怎麼選範圍、per-channel、PlaceholderObserver |
-| [02_manual_insert.ipynb](02_manual_insert.ipynb) | M02-2：不用 Quantizer 手插 observer，與 `prepare_pt2e` 比對；換成 FakeQuantize 與兩個開關 |
-| [03_observer_to_qdq.ipynb](03_observer_to_qdq.ipynb) | M02-3：手做 `convert_pt2e`：observer → q/dq、`DuplicateDQPass`、weight 的 constant folding |
+| [00_overview.ipynb](00_overview.ipynb) | Overview: split prepare and convert apart and do everything by hand once; the steps of observer, FakeQuantize, and convert |
+| [01_observer_zoo.ipynb](01_observer_zoo.ipynb) | M02-1: symmetric vs. affine, how MinMax / Histogram / MovingAverage choose the range, per-channel, PlaceholderObserver |
+| [02_manual_insert.ipynb](02_manual_insert.ipynb) | M02-2: insert observers by hand without a Quantizer and compare with `prepare_pt2e`; switch to FakeQuantize and its two switches |
+| [03_observer_to_qdq.ipynb](03_observer_to_qdq.ipynb) | M02-3: do `convert_pt2e` by hand: observer → q/dq, `DuplicateDQPass`, constant folding of the weight |
 
-## 在自己的電腦上執行
+## Running on Your Own Machine
 
-全專案共用一個 [uv](https://docs.astral.sh/uv/) 環境（Python 3.12，在 `.venv/`），graphviz 的子圖需要系統的 `dot` 執行檔。在專案根目錄執行：
+The whole project shares one [uv](https://docs.astral.sh/uv/) environment (Python 3.12, in `.venv/`); graphviz subgraphs need the system `dot` executable. Run from the project root:
 
 ```bash
-brew install graphviz          # Ubuntu：sudo apt install graphviz
-uv sync                        # 建立 .venv，全專案只需做一次
+brew install graphviz          # Ubuntu: sudo apt install graphviz
+uv sync                        # create .venv, needed only once for the whole project
 uv run jupyter lab m02_observer_fakequant/00_overview.ipynb
 ```
 
-最後一行用 `.venv` 的 Python 啟動 JupyterLab，並在瀏覽器打開本章的概覽。它只負責打開，不會自動執行：
-要逐格按 Shift+Enter，或選選單的 Run → Run All Cells。其他 notebook 從左側的檔案瀏覽器打開。
-也可以改用 VS Code 開 `.ipynb`，kernel 選 `.venv`。
+The last line starts JupyterLab with the `.venv` Python and opens this chapter's overview in the browser. It only opens it and does not run anything:
+press Shift+Enter cell by cell, or use the menu Run → Run All Cells. Open the other notebooks from the file browser on the left.
+You can also open the `.ipynb` in VS Code and pick `.venv` as the kernel.

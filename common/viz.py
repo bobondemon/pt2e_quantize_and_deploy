@@ -1,16 +1,16 @@
-"""用 graphviz 畫 fx 圖的子圖：只畫要解釋的那幾個 node。
+"""Draw sub-graphs of an fx graph with graphviz: only the few nodes that need explaining.
 
-整張圖動輒幾十個 node，真正要看的往往只有三五個。這裡的兩個函式都先決定
-「保留哪些 node」，其餘的 node 只用虛線的「…」表示「外面還有東西」：
+A whole graph easily has dozens of nodes, and only three or five of them are really worth looking at. Both functions here first decide
+which nodes to keep; all other nodes are represented only by a dashed "…" meaning "there is more outside":
 
-  draw(gm, focus=..., hops=1)          畫一張圖的局部
-  draw_stages([(gm1, "export"), ...])  把同一個局部在多個階段並排，標出新增／消失的 node
-  draw_onnx(onnx_model, focus=...)     同 draw，但畫的是 ONNX 圖（onnx.ModelProto，M09）
+  draw(gm, focus=..., hops=1)          draw part of one graph
+  draw_stages([(gm1, "export"), ...])  put the same part from several stages side by side, marking added / disappearing nodes
+  draw_onnx(onnx_model, focus=...)     like draw, but for an ONNX graph (onnx.ModelProto, M09)
 
-回傳的 graphviz.Digraph 在 notebook 裡會直接顯示成 SVG。
-另附 `table()`：notebook 裡的表格用 HTML 顯示（中英混排的等寬文字表在瀏覽器裡會錯位）；
-`annotation_notes()`：把 Quantizer 貼的標籤寫成 draw(notes=...) 的說明，標在 node 底下。
-需要系統的 graphviz（`dot` 執行檔）：macOS `brew install graphviz`、Ubuntu `apt install graphviz`。
+The returned graphviz.Digraph is displayed directly as SVG in a notebook.
+Also included: `table()`, which shows tables in a notebook as HTML (monospace text tables mixing CJK and Latin text misalign in browsers);
+and `annotation_notes()`, which writes the annotations a Quantizer attached as notes for draw(notes=...), placed under each node.
+Requires the system graphviz (the `dot` executable): macOS `brew install graphviz`, Ubuntu `apt install graphviz`.
 """
 
 from collections.abc import Callable, Iterable
@@ -25,9 +25,9 @@ from common.graph_utils import QDQ_PREFIXES, qualified_name, short
 FONT = "PingFang TC, Noto Sans CJK TC, Helvetica, sans-serif"
 
 
-# GitHub 的 notebook 預覽會把 SVG 裡的 UTF-8 文字（中文、…、→）顯示成 \xe5… 這種亂碼。
-# 這裡讓 graphviz 物件在 notebook 輸出的 SVG 改用 XML 字元參照（&#21069; 這類），整份 SVG 只剩 ASCII；
-# 瀏覽器、Jupyter、Quarto 顯示的結果不變。只影響 notebook 的顯示，不影響 graphviz 的其他用法。
+# GitHub's notebook preview shows the UTF-8 text in an SVG (CJK, …, →) as mojibake like \xe5….
+# Here graphviz objects emit their SVG in notebook output with XML character references (such as &#21069;), so the whole SVG is pure ASCII;
+# what browsers, Jupyter and Quarto display is unchanged. It only affects notebook display, not other uses of graphviz.
 _svg_utf8 = graphviz.jupyter_integration.JupyterIntegration._repr_image_svg_xml
 
 
@@ -41,7 +41,7 @@ def _repr_image_svg_xml_ascii(self) -> str:
 
 graphviz.jupyter_integration.JupyterIntegration._repr_image_svg_xml = _repr_image_svg_xml_ascii
 
-# 依 node 種類決定外觀：(shape, 填色, 邊框色)
+# Look is decided by node kind: (shape, fill color, border color)
 STYLE = {
     "io": ("ellipse", "#E7F5FF", "#1C7ED6"),
     "op": ("box", "#FFFFFF", "#495057"),
@@ -57,10 +57,10 @@ Focus = None | str | Iterable[str] | Callable[[torch.fx.Node], bool]
 
 
 # ---------------------------------------------------------------------------
-# node 分類與標籤
+# Node classification and labels
 # ---------------------------------------------------------------------------
 def _is_guard(gm, n):
-    """torch.export 自動插入的 shape guard（_guards_fn），與量化無關，一律不畫。"""
+    """Shape guard inserted automatically by torch.export (_guards_fn); unrelated to quantization and never drawn."""
     return n.op == "call_module" and type(gm.get_submodule(n.target)).__name__ == "GuardsFn"
 
 
@@ -73,7 +73,7 @@ def _kind(gm, n):
         mod = gm.get_submodule(n.target)
         if "FakeQuantize" in type(mod).__name__:
             return "fake_quant"
-        # observer 都有 calculate_qparams；其他 call_module（例如 M00-4 自己掛上去的模組）當一般 op 畫
+        # Every observer has calculate_qparams; other call_modules (e.g. the module attached by hand in M00-4) are drawn as ordinary ops
         return "observer" if hasattr(mod, "calculate_qparams") else "op"
     name = qualified_name(n.target)
     if name.startswith(QDQ_PREFIXES):
@@ -82,15 +82,15 @@ def _kind(gm, n):
 
 
 def _key(gm, n):
-    """跨階段比對 node 用的鍵。一般 node 用名字；observer／fake quant 用它觀察的對象，
-    因為 prepare_pt2e 依插入順序替 observer 編號，同一個位置的 observer 在不同階段可能叫不同名字。"""
+    """Key used to match nodes across stages. Ordinary nodes use their name; observers / fake quants use the thing they observe,
+    because prepare_pt2e numbers observers in insertion order, so the observer at the same position may have different names in different stages."""
     if _kind(gm, n) in ("observer", "fake_quant"):
         return f"{_key(gm, n.args[0])}→observer"
     return n.name
 
 
 def _param_text(gm, n):
-    """get_attr 的短描述；不是 fp32 的 tensor 附上 dtype（例如 convert 後的 int8 weight）。"""
+    """Short description of a get_attr; a tensor that is not fp32 gets its dtype appended (e.g. the int8 weight after convert)."""
     try:
         t = _fetch(gm, n.target)
     except AttributeError:
@@ -108,12 +108,12 @@ def _fetch(gm, target):
 
 
 def _qparams_text(gm, n):
-    """observer 校準後的 qparams；q/dq node 的 scale／zp（per-tensor 時是常數參數）。"""
+    """The qparams of an observer after calibration; the scale / zp of a q/dq node (constant arguments when per-tensor)."""
     if n.op == "call_module":
         mod = gm.get_submodule(n.target)
         min_val = getattr(mod, "min_val", None)
         if not isinstance(min_val, torch.Tensor) or min_val.numel() == 0 or not torch.isfinite(min_val).all():
-            return ""  # 還沒校準，不呼叫 calculate_qparams
+            return ""  # not calibrated yet, so calculate_qparams is not called
         s, z = mod.calculate_qparams()
         if s.numel() > 1:
             return f"per-channel × {s.numel()}"
@@ -124,7 +124,7 @@ def _qparams_text(gm, n):
             return f"scale={s:.4g} zp={z}"
         if "per_channel" in str(n.target):
             return "per-channel"
-        return "scale／zp 執行時計算" if isinstance(s, torch.fx.Node) else ""  # dynamic：qparams 來自 choose_qparams
+        return "scale/zp computed at runtime" if isinstance(s, torch.fx.Node) else ""  # dynamic: qparams come from choose_qparams
     return ""
 
 
@@ -149,7 +149,7 @@ def _label(gm, n, show_params, note):
     qp = _qparams_text(gm, n)
     if qp:
         rows.append(f'<font point-size="9" color="#5F3DC4">{_esc(qp)}</font>')
-    for line in (note or "").split("\n"):  # 一則說明可以有好幾行
+    for line in (note or "").split("\n"):  # one note can span several lines
         if line:
             rows.append(f'<font point-size="10" color="{HIGHLIGHT}"><i>{_esc(line)}</i></font>')
     return "<" + "<br/>".join(rows) + ">"
@@ -160,10 +160,10 @@ def _esc(s):
 
 
 # ---------------------------------------------------------------------------
-# 選出要畫的 node
+# Choose the nodes to draw
 # ---------------------------------------------------------------------------
 def _neighbors(gm, n, show_params):
-    """資料流上的鄰居（輸入 + 使用者）；get_attr 預設內嵌在標籤裡，不算鄰居。"""
+    """Neighbors on the dataflow (inputs + users); get_attr is inlined in the label by default and does not count as a neighbor."""
     ins = [a for a in n.all_input_nodes if show_params or a.op != "get_attr"]
     return [m for m in [*ins, *n.users] if not _is_guard(gm, m)]
 
@@ -181,8 +181,8 @@ def _select(gm, focus: Focus, hops, show_params):
     else:
         names = {focus} if isinstance(focus, str) else set(focus)
         seeds = {n for n in nodes if n.name in names}
-        if not seeds:  # 部分名稱不在圖上沒關係（例如 prepare 之後 batch_norm 已被折掉），全都找不到才報錯
-            raise ValueError(f"圖上找不到這些 node：{sorted(names)}")
+        if not seeds:  # It is fine if some names are not on the graph (e.g. batch_norm is already folded away after prepare); only error if none are found
+            raise ValueError(f"could not find these nodes on the graph: {sorted(names)}")
     kept, frontier = set(seeds), set(seeds)
     for _ in range(hops):
         frontier = {m for n in frontier for m in _neighbors(gm, n, show_params)} - kept
@@ -191,10 +191,10 @@ def _select(gm, focus: Focus, hops, show_params):
 
 
 def _carry_over(gm, prev_keys, kept_prev_keys, show_params):
-    """下一個階段要保留的 node：上一階段保留的同一批 node（以 _key 比對），加上和它們相連的新 node。
+    """The nodes to keep in the next stage: the same nodes kept in the previous stage (matched by _key), plus the new nodes connected to them.
 
-    新 node（上一階段沒有，例如 prepare 插的 observer、convert 插的 q/dq）
-    只要透過一串新 node 接到保留的 node，就一起保留。
+    A new node (absent from the previous stage, e.g. observers inserted by prepare, q/dq inserted by convert)
+    is kept as well as long as a chain of new nodes connects it to a kept node.
     """
     nodes = _drawable(gm, show_params)
     kept = {n for n in nodes if _key(gm, n) in kept_prev_keys}
@@ -207,17 +207,17 @@ def _carry_over(gm, prev_keys, kept_prev_keys, show_params):
 
 
 # ---------------------------------------------------------------------------
-# 畫圖
+# Drawing
 # ---------------------------------------------------------------------------
 def _add_graph(g, gm, kept, *, prefix, show_params, show_shapes, notes, highlight, added=(), removed=()):
-    """把 kept 的 node 與邊加進 g，回傳 (起點 id, 終點 id)：沒有入邊／出邊的 node，draw_stages 換行時要用。"""
-    kept = [n for n in gm.graph.nodes if n in kept]  # 依圖上的順序輸出，版面才會固定
+    """Add the kept nodes and edges to g and return (start ids, end ids): the nodes with no incoming / outgoing edge, which draw_stages needs when wrapping to a new row."""
+    kept = [n for n in gm.graph.nodes if n in kept]  # emit in graph order so the layout stays stable
     ids, edges = [prefix + n.name for n in kept], []
     for n in kept:
         shape, fill, border = STYLE[_kind(gm, n)]
         attrs = dict(shape=shape, style="filled,rounded" if shape == "box" else "filled",
                      fillcolor=fill, color=border, penwidth="1.2")
-        if n.name in removed:  # 先套「下一步消失」，若同時是新增的，下面的綠框蓋過紅色
+        if n.name in removed:  # Apply "disappears in the next step" first; if the node is also new, the green border below overrides the red
             attrs.update(style=attrs["style"] + ",dashed", color=REMOVED, penwidth="2.5")
         if n.name in added:
             attrs.update(color=ADDED, penwidth="3")
@@ -250,14 +250,14 @@ def _add_graph(g, gm, kept, *, prefix, show_params, show_shapes, notes, highligh
 def _shape_text(n):
     val = n.meta.get("val")
     if not isinstance(val, torch.Tensor):
-        # convert_pt2e 插入的 q/dq 沒有 meta["val"]，型別從參數推：quantize 輸出最後一個參數的 dtype，dequantize 輸出 fp32
+        # The q/dq inserted by convert_pt2e have no meta["val"], so the type is inferred from the arguments: quantize outputs the dtype in its last argument, dequantize outputs fp32
         target = qualified_name(n.target)
         if target.startswith("quantized_decomposed.quantize") and isinstance(n.args[-1], torch.dtype):
             return f" {str(n.args[-1]).removeprefix('torch.')}"
         if target.startswith("quantized_decomposed.dequantize"):
             return " float32"
         return ""
-    dims = ",".join(str(d) if isinstance(d, int) else "N" for d in val.shape)  # 動態維度印成 N
+    dims = ",".join(str(d) if isinstance(d, int) else "N" for d in val.shape)  # dynamic dimensions are printed as N
     dtype = "" if val.dtype == torch.float32 else f" {str(val.dtype).removeprefix('torch.')}"
     return f" [{dims}]{dtype}"
 
@@ -274,13 +274,13 @@ def _new_digraph(title, rankdir):
 
 def draw(gm, focus: Focus = None, hops=1, *, title=None, notes=None, highlight=(),
          show_params=False, show_shapes=False, rankdir="TB") -> graphviz.Digraph:
-    """畫 gm 的局部。
+    """Draw part of gm.
 
-    focus：要看的 node 名稱（字串或一組字串），或 `lambda node: ...`；None 畫整張圖。
-    hops：從 focus 往輸入、往使用者各擴張幾步。
-    notes：{node 名稱: 一句說明}，畫在該 node 底下。highlight：要加粗外框的 node 名稱。
-    show_params：weight／bias 這類 get_attr 另外畫成 node（預設內嵌在使用它的 op 標籤裡）。
-    show_shapes：邊上標 tensor shape（取自 node.meta["val"]）。
+    focus: the node name(s) to look at (a string or a collection of strings), or `lambda node: ...`; None draws the whole graph.
+    hops: how many steps to expand from focus toward the inputs and toward the users.
+    notes: {node name: one-line note}, drawn under that node. highlight: names of nodes whose border is made bold.
+    show_params: draw get_attr nodes such as weight / bias as separate nodes (by default they are inlined in the label of the op that uses them).
+    show_shapes: label edges with the tensor shape (taken from node.meta["val"]).
     """
     g = _new_digraph(title, rankdir)
     kept = _select(gm, focus, hops, show_params)
@@ -291,16 +291,16 @@ def draw(gm, focus: Focus = None, hops=1, *, title=None, notes=None, highlight=(
 
 def draw_stages(stages, focus: Focus = None, hops=1, *, title=None, notes=None, per_row=2,
                 show_params=False, show_shapes=False, rankdir="TB") -> graphviz.Digraph:
-    """把同一個局部在多個階段並排（例如 export → prepare → convert）。
+    """Put the same part of the graph from several stages side by side (e.g. export → prepare → convert).
 
-    stages：[(gm, "階段名稱"), ...]。focus／hops 只用在第一個階段；之後每個階段保留
-    上一階段的同一批 node 與新接上的 node。一般 node 依名字比對，observer 依它觀察的對象比對。新增的 node 用綠框，下一階段消失的 node 用虛線
-    （紅色；若同時是新增的則維持綠色）。圖的標題下方會自動加上這段圖例。
-    notes：{node 名稱: 說明}，同名 node 在每個階段都會標；也可以傳一個 list，每個階段各一個 dict。
-    per_row：一個 row 放幾個階段，超過就換到下一個 row。預設 2：三個階段並排時，在網站的內文寬度裡會縮到看不清，
-    所以第三個階段（通常是 convert）畫在第二個 row。
+    stages: [(gm, "stage name"), ...]. focus / hops apply only to the first stage; each later stage keeps
+    the same nodes as the previous stage plus the newly attached nodes. Ordinary nodes are matched by name, observers by the thing they observe. New nodes get a green border, and nodes that disappear in the next stage are dashed
+    (red; if also new, they stay green). This legend is added automatically under the graph title.
+    notes: {node name: note}, applied to nodes of that name in every stage; a list is also accepted, with one dict per stage.
+    per_row: how many stages go in a row before wrapping to the next row. Default 2: three stages side by side shrink too small to read at the website's body width,
+    so the third stage (usually convert) goes on the second row.
     """
-    legend = "綠框：這一步新增的 node　虛線：下一步會消失的 node"
+    legend = "Green border: node added in this step    Dashed: node that disappears in the next step"
     g = _new_digraph(f"{title}\n{legend}" if title else legend, rankdir)
     gms = [gm for gm, _ in stages]
     kept_sets, added_sets = [_select(gms[0], focus, hops, show_params)], [set()]
@@ -309,17 +309,17 @@ def draw_stages(stages, focus: Focus = None, hops=1, *, title=None, notes=None, 
         kept, added = _carry_over(gm, prev_keys, {_key(prev, n) for n in kept_sets[-1]}, show_params)
         kept_sets.append(kept)
         added_sets.append(added)
-    ends = []  # 每個階段的 (起點, 終點)
+    ends = []  # (start, end) of each stage
     for i, ((gm, label), kept) in enumerate(zip(stages, kept_sets)):
         nxt = {_key(gms[i + 1], n) for n in gms[i + 1].graph.nodes} if i + 1 < len(gms) else None
         removed = {n.name for n in kept if nxt is not None and _key(gm, n) not in nxt}
-        c = graphviz.Digraph(name=f"cluster_{i}")  # graphviz 以 cluster_ 開頭的子圖畫成一個框
+        c = graphviz.Digraph(name=f"cluster_{i}")  # graphviz draws a subgraph whose name starts with cluster_ as a box
         c.attr(label=label, fontsize="13", style="rounded", color="#CED4DA", labeljust="l")
         ends.append(_add_graph(c, gm, kept, prefix=f"s{i}__", show_params=show_params, show_shapes=show_shapes,
                                notes=(notes[i] if isinstance(notes, (list, tuple)) else notes) or {},
                                highlight=set(), added=added_sets[i], removed=removed))
         g.subgraph(c)
-    # 換 row：從上一個 row 每個階段的終點，拉看不見的邊到下一個 row 每個階段的起點，graphviz 就會把下一個 row 排在下面
+    # Wrap to a new row: draw invisible edges from the end of each stage in the previous row to the start of each stage in the next row, and graphviz places the next row below
     for i in range(per_row, len(stages)):
         row_above = range((i // per_row - 1) * per_row, i // per_row * per_row)
         for j in row_above:
@@ -330,57 +330,57 @@ def draw_stages(stages, focus: Focus = None, hops=1, *, title=None, notes=None, 
 
 
 def _spec_text(spec):
-    """一份 qspec 的短描述，畫在 node 底下用。"""
+    """Short description of a qspec, drawn under a node."""
     if spec is None:
-        return "不量化"
+        return "not quantized"
     name = type(spec).__name__
     if name == "SharedQuantizationSpec":
         e = spec.edge_or_node
-        return f"與 {e[0].name}→{e[1].name} 共用" if isinstance(e, tuple) else f"與 {e.name} 的輸出共用"
+        return f"shared with {e[0].name}→{e[1].name}" if isinstance(e, tuple) else f"shared with output of {e.name}"
     if name == "DerivedQuantizationSpec":
         return f"Derived {str(spec.dtype).removeprefix('torch.')}"
     if name == "FixedQParamsQuantizationSpec":
-        return f"固定 scale={spec.scale:.4g} zp={spec.zero_point}"
-    scheme = str(spec.qscheme).removeprefix("torch.")  # per_tensor_affine、per_channel_symmetric…
+        return f"fixed scale={spec.scale:.4g} zp={spec.zero_point}"
+    scheme = str(spec.qscheme).removeprefix("torch.")  # per_tensor_affine, per_channel_symmetric…
     granularity, kind = scheme.rsplit("_", 1)
     return f"{str(spec.dtype).removeprefix('torch.')} {granularity.replace('_', '-')} {kind.replace('symmetric', 'sym')}"
 
 
 def annotation_notes(gm, unlabeled=False) -> dict[str, str]:
-    """把每個 node 的標籤（QuantizationAnnotation）寫成 draw(notes=...) 用的說明。
+    """Write each node's annotation (QuantizationAnnotation) as notes for draw(notes=...).
 
-    每條輸入邊一行「邊 上游：規格」，輸出一行「輸出：規格」；有標籤但沒有輸出標籤時寫「輸出：沒有標籤」。
-    unlabeled=True 時，完全沒有標籤的 op 也標上「沒有標籤」。
+    One line per input edge, "edge upstream: spec", and one line for the output, "output: spec"; if the node is annotated but has no output annotation, it says "output: no annotation".
+    With unlabeled=True, ops with no annotation at all are also marked "no annotation".
     """
     notes = {}
     for n in gm.graph.nodes:
-        if n.op != "call_function":  # get_attr 也可能帶空標籤（XNNPACKQuantizer 用來記錄「已標過」），不畫
+        if n.op != "call_function":  # get_attr can also carry an empty annotation (XNNPACKQuantizer uses it to record "already annotated"); not drawn
             continue
         ann = n.meta.get("quantization_annotation")
         if ann is None:
             if unlabeled:
-                notes[n.name] = "沒有標籤"
+                notes[n.name] = "no annotation"
             continue
-        lines = [f"邊 {a.name}：{_spec_text(s)}" for a, s in ann.input_qspec_map.items()]
-        lines.append(f"輸出：{_spec_text(ann.output_qspec)}" if ann.output_qspec is not None else "輸出：沒有標籤")
+        lines = [f"edge {a.name}: {_spec_text(s)}" for a, s in ann.input_qspec_map.items()]
+        lines.append(f"output: {_spec_text(ann.output_qspec)}" if ann.output_qspec is not None else "output: no annotation")
         notes[n.name] = "\n".join(lines)
     return notes
 
 
 def table(rows_or_html, headers=()) -> HTML:
-    """在 notebook 裡顯示表格：傳 rows + headers，或傳 graph_utils 用 tablefmt="html" 產生的字串。"""
+    """Show a table in a notebook: pass rows + headers, or a string produced by graph_utils with tablefmt="html"."""
     if isinstance(rows_or_html, str):
         return HTML(rows_or_html)
     return HTML(tabulate(rows_or_html, headers=list(headers), tablefmt="html", disable_numparse=True))
 
 
 def _onnx_op(node) -> str:
-    """ONNX node 的 op 名稱；不是標準 domain 的加上 domain，例如 com.microsoft.QLinearAdd。"""
+    """Op name of an ONNX node; non-standard domains are prefixed with the domain, e.g. com.microsoft.QLinearAdd."""
     return f"{node.domain}.{node.op_type}" if node.domain not in ("", "ai.onnx") else node.op_type
 
 
 def _onnx_const_text(arr) -> str:
-    """ONNX 常數的短描述：純量印數值，其餘印 dtype[shape]。"""
+    """Short description of an ONNX constant: scalars print their value, everything else prints dtype[shape]."""
     if arr.size == 1:
         v = arr.item()
         return f"{v:.4g}" if isinstance(v, float) else str(v)
@@ -388,19 +388,19 @@ def _onnx_const_text(arr) -> str:
 
 
 def draw_onnx(model, focus=None, hops=1, *, title=None, notes=None, highlight=(), rankdir="TB") -> graphviz.Digraph:
-    """畫 ONNX 圖（onnx.ModelProto）的局部，用法與外觀同 draw()（M09）。
+    """Draw part of an ONNX graph (onnx.ModelProto), used and styled like draw() (M09).
 
-    focus：ONNX node 的 name（例如 node_conv2d）、一組 name，或 `lambda node: ...`；None 畫整張圖。
-    ORT 的 QDQ node fusion 沿用原本的 name（例如 node_conv2d 從 Conv 變成 QLinearConv），同一個 focus 可以跨等級比較；
-    LAYOUT 換成 NHWC 版本的 node 會換名字。
-    只吃常數的 node（例如 weight 的 DequantizeLinear）與 initializer 不另畫，內嵌在使用它的 op 標籤的 ‹…› 裡；
-    QuantizeLinear／DequantizeLinear 的 scale、zero_point 是純量時直接印數值。
+    focus: the name of an ONNX node (e.g. node_conv2d), a collection of names, or `lambda node: ...`; None draws the whole graph.
+    ORT's QDQ node fusion keeps the original name (e.g. node_conv2d goes from Conv to QLinearConv), so the same focus can be compared across levels;
+    nodes swapped for the NHWC version at the LAYOUT level get new names.
+    Nodes that only consume constants (e.g. the weight's DequantizeLinear) and initializers are not drawn separately; they are inlined in the ‹…› of the label of the op that uses them;
+    when the scale and zero_point of QuantizeLinear / DequantizeLinear are scalars, their values are printed directly.
     """
-    from onnx import numpy_helper  # 只有 M09 用到，不讓 viz 一定要依賴 onnx
+    from onnx import numpy_helper  # only M09 uses this, so viz does not have to depend on onnx
 
     notes = notes or {}
     inits = {i.name: numpy_helper.to_array(i) for i in model.graph.initializer}
-    const_text = {}  # 只吃常數的 node 的輸出 → 描述
+    const_text = {}  # output of a constants-only node -> description
     for n in model.graph.node:
         if n.op_type == "Constant":
             const_text[n.output[0]] = "Constant"
@@ -427,7 +427,7 @@ def draw_onnx(model, focus=None, hops=1, *, title=None, notes=None, highlight=()
             wanted = {focus} if isinstance(focus, str) else set(focus)
             seed = wanted & set(order)
         if not seed:
-            raise ValueError(f"focus 在圖上找不到任何 node：{focus}")
+            raise ValueError(f"focus matches no node on the graph: {focus}")
         kept, frontier = set(seed), set(seed)
         for _ in range(hops):
             frontier = {m for k in frontier for m in preds.get(k, []) + succs.get(k, [])} - kept

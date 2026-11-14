@@ -1,0 +1,143 @@
+# English edition of the site (Quarto sub-project). Mirrors ../_quarto.yml.
+# Notebooks are not executed at build time; stored outputs in the .ipynb are used.
+#   Preview: uv run --group site quarto preview en
+#   Build:   uv run --group site quarto render en   (output: en/_site/, CI moves it to _site/en/)
+project:
+  type: website
+  output-dir: _site
+  render:
+    - index.qmd
+    - part1_overview.qmd
+    - part2_overview.qmd
+    - m00_export_basics/*.ipynb
+    - m01_hello_pt2e/*.ipynb
+    - m02_observer_fakequant/*.ipynb
+    - m03_quantizer_api/*.ipynb
+    - m04_conv_bn_folding/*.ipynb
+    - m05_ptq_pipeline/*.ipynb
+    - m06_qat_pipeline/*.ipynb
+    - m07_representation_lowering/*.ipynb
+    - m08_xnnpack_executorch/*.ipynb
+    - m09_onnx_runtime/*.ipynb
+    - m10_custom_backend/*.ipynb
+
+execute:
+  enabled: false
+
+
+website:
+  title: "End-to-End PT2E: Quantization, Backend Deployment, and Who Does What on Edge Devices"
+  page-navigation: true
+  navbar:
+    background: primary
+    right:
+      - text: '<span class="lang-mark">🌐 中文</span>'       # href is rewritten by lang-switch.html to the same page in Chinese
+        href: ../index.html
+  repo-url: https://github.com/bobondemon/pt2e_quantize_and_deploy
+  repo-subdir: en
+  repo-actions: [source, issue]   # per-page "View source" / "Report an issue" links
+  sidebar:
+    style: docked
+    search: true
+    tools:
+      - icon: translate
+        text: '<span class="lang-mark">中文</span>'
+        href: ../index.html
+      - icon: github
+        href: https://github.com/bobondemon/pt2e_quantize_and_deploy
+        aria-label: GitHub
+    collapse-level: 1   # collapse chapters except the current one
+    contents:
+      - index.qmd
+      - section: "M00 torch.export and the fx graph"
+        contents:
+          - m00_export_basics/00_overview.ipynb
+          - m00_export_basics/01_export_and_inspect.ipynb
+          - m00_export_basics/02_eval_vs_train.ipynb
+          - m00_export_basics/03_decomposition.ipynb
+          - m00_export_basics/04_fx_graph_editing.ipynb
+      - text: "Part 1 overview: fp32 model → Q/DQ graph"
+        href: part1_overview.qmd
+      - section: "M01 Your first quantization"
+        contents:
+          - m01_hello_pt2e/00_overview.ipynb
+          - m01_hello_pt2e/01_minimal_ptq.ipynb
+          - m01_hello_pt2e/02_graph_diff.ipynb
+          - m01_hello_pt2e/03_config_matrix.ipynb
+      - section: "M02 Observers and fake quant"
+        contents:
+          - m02_observer_fakequant/00_overview.ipynb
+          - m02_observer_fakequant/01_observer_zoo.ipynb
+          - m02_observer_fakequant/02_manual_insert.ipynb
+          - m02_observer_fakequant/03_observer_to_qdq.ipynb
+      - section: "M03 Annotations and the Quantizer"
+        contents:
+          - m03_quantizer_api/00_overview.ipynb
+          - m03_quantizer_api/01_annotate_then_prepare.ipynb
+          - m03_quantizer_api/02_read_annotations.ipynb
+          - m03_quantizer_api/03_my_first_quantizer.ipynb
+          - m03_quantizer_api/04_shared_and_implicit_sharing.ipynb
+          - m03_quantizer_api/05_derived_and_fixed_qparams.ipynb
+          - m03_quantizer_api/06_partial_quantization.ipynb
+          - m03_quantizer_api/07_backend_config_api.ipynb
+      - section: "M04 Conv + BN folding"
+        contents:
+          - m04_conv_bn_folding/00_overview.ipynb
+          - m04_conv_bn_folding/01_bn_folding_trace.ipynb
+          - m04_conv_bn_folding/02_qat_graph_structure.ipynb
+          - m04_conv_bn_folding/03_qat_vs_article.ipynb
+      - section: "M05 Debugging PTQ accuracy"
+        contents:
+          - m05_ptq_pipeline/00_overview.ipynb
+          - m05_ptq_pipeline/01_ptq_full.ipynb
+          - m05_ptq_pipeline/02_calibration_study.ipynb
+          - m05_ptq_pipeline/03_layerwise_sqnr.ipynb
+          - m05_ptq_pipeline/04_mixed_precision.ipynb
+          - m05_ptq_pipeline/05_weight_norm_ptq.ipynb
+      - section: "M06 The QAT training flow"
+        contents:
+          - m06_qat_pipeline/00_overview.ipynb
+          - m06_qat_pipeline/01_qat_minimal.ipynb
+          - m06_qat_pipeline/02_train_eval_switch.ipynb
+          - m06_qat_pipeline/03_fused_fakequant_mismatch.ipynb
+          - m06_qat_pipeline/04_qat_vs_ptq_int4.ipynb
+          - m06_qat_pipeline/05_learnable_fake_quant.ipynb
+          - m06_qat_pipeline/06_weight_norm_qat.ipynb
+      - text: "Part 2 overview: after the Q/DQ graph"
+        href: part2_overview.qmd
+      - section: "M07 Backend deployment overview"
+        contents:
+          - m07_representation_lowering/00_overview.ipynb
+          - m07_representation_lowering/01_fp32_numeric_floor.ipynb
+          - m07_representation_lowering/02_representation_and_lowering.ipynb
+      - section: "M08 XNNPACK / ExecuTorch"
+        contents:
+          - m08_xnnpack_executorch/00_overview.ipynb
+          - m08_xnnpack_executorch/01_executorch_vs_torchao_copy.ipynb
+          - m08_xnnpack_executorch/02_export_to_pte.ipynb
+          - m08_xnnpack_executorch/03_unsupported_ops.ipynb
+          - m08_xnnpack_executorch/04_latency.ipynb
+      - section: "M09 ONNX Runtime"
+        contents:
+          - m09_onnx_runtime/00_overview.ipynb
+          - m09_onnx_runtime/01_onnx_qdq_export.ipynb
+          - m09_onnx_runtime/02_ort_qdq_fusion.ipynb
+          - m09_onnx_runtime/03_ort_quant_compare.ipynb
+      - section: "M10 A custom backend"
+        contents:
+          - m10_custom_backend/00_overview.ipynb
+          - m10_custom_backend/01_vpu_quantizer.ipynb
+          - m10_custom_backend/02_constraint_checker.ipynb
+          - m10_custom_backend/03_fallback_report.ipynb
+
+format:
+  html:
+    theme: cosmo
+    lang: en
+    grid:
+      body-width: 900px
+    toc: true
+    toc-depth: 2
+    code-overflow: wrap
+    highlight-style: github
+    include-in-header: lang-switch.html

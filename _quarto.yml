@@ -19,6 +19,7 @@ project:
     - m08_xnnpack_executorch/*.ipynb
     - m09_onnx_runtime/*.ipynb
     - m10_custom_backend/*.ipynb
+    - "!en/"      # 英文版是獨立的 Quarto 專案（en/_quarto.yml），不要被中文版收進來
 
 execute:
   enabled: false
@@ -29,12 +30,20 @@ language: _language-zh-TW.yml
 website:
   title: "PT2E 端到端：邊緣裝置的量化、後端部署與分工"
   page-navigation: true
+  navbar:
+    background: primary
+    right:
+      - text: '<span class="lang-mark">🌐 English</span>'       # href 由 lang-switch.html 的 JS 換成「同一頁的英文版」
+        href: en/index.html
   repo-url: https://github.com/bobondemon/pt2e_quantize_and_deploy
   repo-actions: [source, issue]   # 每頁的「檢視原始檔」「回報問題」連結
   sidebar:
     style: docked
     search: true
     tools:
+      - icon: translate
+        text: '<span class="lang-mark">English</span>'
+        href: en/index.html
       - icon: github
         href: https://github.com/bobondemon/pt2e_quantize_and_deploy
         aria-label: GitHub
@@ -132,3 +141,4 @@ format:
     toc-depth: 2
     code-overflow: wrap
     highlight-style: github
+    include-in-header: assets/lang-switch.html

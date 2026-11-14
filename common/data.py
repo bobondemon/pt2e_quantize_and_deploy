@@ -1,9 +1,11 @@
-"""合成資料集：不用下載任何東西，離線就能訓練/校準。
+"""Synthetic dataset: nothing to download, so training and calibration work offline.
 
-任務：16x16 的 RGB 影像上有一個亮塊，判斷它在哪一個象限（4 類）。
-簡單到 TinyConvNet 幾十個 step 就能學會，但又有足夠的 activation 動態範圍
-可以讓量化誤差顯現出來。
+Task: a 16x16 RGB image contains one bright patch; decide which quadrant it is in (4 classes).
+Simple enough that TinyConvNet learns it in a few dozen steps, yet with enough activation
+dynamic range for quantization error to show up.
 """
+
+from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader, TensorDataset
@@ -13,10 +15,10 @@ NUM_CLASSES = 4
 
 
 def make_tensors(n=512, seed=0, noise=0.8, outlier_ratio=0.0):
-    """回傳 (images, labels)。
+    """Return (images, labels).
 
-    outlier_ratio > 0 時會隨機把一些像素放大成極端值，
-    用來在 M05 展示 MinMaxObserver 被 outlier 拉爆的現象。
+    When outlier_ratio > 0, some pixels are randomly blown up to an extreme value,
+    which M05 uses to show MinMaxObserver being blown out by outliers.
     """
     g = torch.Generator().manual_seed(seed)
     x = torch.randn(n, 3, SIZE, SIZE, generator=g) * noise
@@ -27,7 +29,7 @@ def make_tensors(n=512, seed=0, noise=0.8, outlier_ratio=0.0):
         q = int(y[i])
         r0 = (q // 2) * half
         c0 = (q % 2) * half
-        # 在該象限內隨機放一個 4x4 的亮塊
+        # Place a 4x4 bright patch at a random position inside that quadrant
         dr = int(torch.randint(0, half - 3, (1,), generator=g))
         dc = int(torch.randint(0, half - 3, (1,), generator=g))
         ch = int(torch.randint(0, 3, (1,), generator=g))
@@ -36,7 +38,7 @@ def make_tensors(n=512, seed=0, noise=0.8, outlier_ratio=0.0):
     if outlier_ratio > 0:
         k = max(1, int(n * outlier_ratio))
         idx = torch.randperm(n, generator=g)[:k]
-        x[idx, 0, 0, 0] = 50.0  # 誇張的 outlier
+        x[idx, 0, 0, 0] = 50.0  # exaggerated outlier
 
     return x, y
 
@@ -47,7 +49,7 @@ def make_loader(n=512, batch_size=32, seed=0, shuffle=True, **kw):
 
 
 def calibration_batches(n=128, batch_size=16, seed=123, **kw):
-    """PTQ 校準用的 iterator（只回傳 input，不需要 label）。"""
+    """Iterator for PTQ calibration (yields inputs only; no labels needed)."""
     x, _ = make_tensors(n=n, seed=seed, **kw)
     for i in range(0, n, batch_size):
         yield (x[i : i + batch_size],)
@@ -55,7 +57,7 @@ def calibration_batches(n=128, batch_size=16, seed=123, **kw):
 
 @torch.no_grad()
 def evaluate(model, loader):
-    """回傳 top-1 accuracy。"""
+    """Return top-1 accuracy."""
     correct = total = 0
     for x, y in loader:
         pred = model(x).argmax(dim=1)
@@ -66,7 +68,7 @@ def evaluate(model, loader):
 
 @torch.no_grad()
 def evaluate_loss(model, loader):
-    """回傳平均 cross-entropy loss。M06 起的主指標：比 accuracy 連續、敏感，且 QAT 直接最佳化它。"""
+    """Return the mean cross-entropy loss. The main metric from M06 on: smoother and more sensitive than accuracy, and QAT optimizes it directly."""
     lossf = torch.nn.CrossEntropyLoss(reduction="sum")
     total = count = 0.0
     for x, y in loader:
@@ -76,7 +78,7 @@ def evaluate_loss(model, loader):
 
 
 def train(model, loader, epochs=3, lr=1e-2, log_every=0):
-    """極簡訓練迴圈（fp32 與 QAT 共用）。"""
+    """Minimal training loop (shared by fp32 and QAT)."""
     opt = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
     lossf = torch.nn.CrossEntropyLoss()
     step = 0
@@ -92,14 +94,31 @@ def train(model, loader, epochs=3, lr=1e-2, log_every=0):
     return model
 
 
-def trained_tiny_net(epochs=20, seed=0):
-    """訓練好的 TinyConvNet（eval 模式）。M05 起的腳本共用，固定 seed 讓結果可重現。
+TINY_NET_WEIGHTS = Path(__file__).with_name("tiny_net.pt")  # written by tools/make_tiny_net_weights.py
 
-    20 epoch 後在這個合成任務上約 0.71 accuracy：不算高，但量化前後的差異才看得出來。
-    """
+
+def _train_tiny_net(epochs, seed):
     from common.models import TinyConvNet
 
     torch.manual_seed(seed)
     model = TinyConvNet()
     train(model, make_loader(n=1024, seed=1), epochs=epochs)
     return model.eval()
+
+
+def trained_tiny_net(epochs=20, seed=0):
+    """A trained TinyConvNet (eval mode). Shared by the scripts from M05 on.
+
+    After 20 epochs it reaches about 0.71 accuracy on this synthetic task: not high, but low enough that the difference before and after quantization is visible.
+
+    Training is not bit-reproducible across platforms (or even thread counts), and the notebooks' numbers depend on the exact weights.
+    So with the default arguments, if `common/tiny_net.pt` exists, its weights are loaded instead of retraining; this makes every platform quantize
+    the same model. With any other `epochs`/`seed`, or when the file is missing, the model is trained from scratch (the seed is fixed).
+    """
+    if (epochs, seed) == (20, 0) and TINY_NET_WEIGHTS.exists():
+        from common.models import TinyConvNet
+
+        model = TinyConvNet()
+        model.load_state_dict(torch.load(TINY_NET_WEIGHTS, map_location="cpu", weights_only=True)["state_dict"])
+        return model.eval()
+    return _train_tiny_net(epochs, seed)
