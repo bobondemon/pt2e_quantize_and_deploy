@@ -5,6 +5,8 @@ Simple enough that TinyConvNet learns it in a few dozen steps, yet with enough a
 dynamic range for quantization error to show up.
 """
 
+from pathlib import Path
+
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -92,14 +94,31 @@ def train(model, loader, epochs=3, lr=1e-2, log_every=0):
     return model
 
 
-def trained_tiny_net(epochs=20, seed=0):
-    """A trained TinyConvNet (eval mode). Shared by the scripts from M05 on; the seed is fixed so results are reproducible.
+TINY_NET_WEIGHTS = Path(__file__).with_name("tiny_net.pt")  # written by tools/make_tiny_net_weights.py
 
-    After 20 epochs it reaches about 0.71 accuracy on this synthetic task: not high, but low enough that the difference before and after quantization is visible.
-    """
+
+def _train_tiny_net(epochs, seed):
     from common.models import TinyConvNet
 
     torch.manual_seed(seed)
     model = TinyConvNet()
     train(model, make_loader(n=1024, seed=1), epochs=epochs)
     return model.eval()
+
+
+def trained_tiny_net(epochs=20, seed=0):
+    """A trained TinyConvNet (eval mode). Shared by the scripts from M05 on.
+
+    After 20 epochs it reaches about 0.71 accuracy on this synthetic task: not high, but low enough that the difference before and after quantization is visible.
+
+    Training is not bit-reproducible across platforms (or even thread counts), and the notebooks' numbers depend on the exact weights.
+    So with the default arguments, if `common/tiny_net.pt` exists, its weights are loaded instead of retraining; this makes every platform quantize
+    the same model. With any other `epochs`/`seed`, or when the file is missing, the model is trained from scratch (the seed is fixed).
+    """
+    if (epochs, seed) == (20, 0) and TINY_NET_WEIGHTS.exists():
+        from common.models import TinyConvNet
+
+        model = TinyConvNet()
+        model.load_state_dict(torch.load(TINY_NET_WEIGHTS, map_location="cpu", weights_only=True)["state_dict"])
+        return model.eval()
+    return _train_tiny_net(epochs, seed)
