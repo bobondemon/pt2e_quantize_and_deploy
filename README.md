@@ -6,6 +6,12 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/bobondemon/pt2e_quantize_and_deploy/blob/main/en/m01_hello_pt2e/00_overview.ipynb)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+A few words before we start 2026/11/14
+
+> These days it feels like teaching material is mostly read by AI, and AI probably already knows all of this\
+> If AI helps with quantization and deployment, do humans — the bottleneck — still need to understand it? I don't know, but right now I want to write down what I've learned from experience\
+> Anyway, this course is written for humans, assuming anyone still wants to understand ...
+
 A hands-on course on quantizing models to int8 with PyTorch 2 Export (PT2E) and handing them to backends such as ExecuTorch + XNNPACK and ONNX Runtime.
 
 The course targets edge devices with limited compute and power (for example always-on sensing and voice wake-up): small models, a fully integer graph (mostly int8), fixed shapes, and a limited set of ops supported by the backend.

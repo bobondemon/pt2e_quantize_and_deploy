@@ -6,6 +6,12 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/bobondemon/pt2e_quantize_and_deploy/blob/main/m01_hello_pt2e/00_overview.ipynb)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+寫在前頭的碎嘴 2026/11/14
+
+> 感覺現在做教材應該只剩 AI 會看, 但 AI 應該本身就已經有知識了\
+> 讓 AI 協助量化部署, 身為瓶頸的人類還需要懂嗎? 不知道, 至少此時此刻我想做經驗總結\
+> 總之, 這本教材是寫給人看的, 前提是如果還有人想了解的話 ...
+
 用 PyTorch 2 Export（PT2E）把模型量化成 int8，再交給 ExecuTorch + XNNPACK、ONNX Runtime 這類後端執行的動手教材。
 
 這份教材的對象是算力與功耗有限的邊緣裝置（例如 always-on 的感測、語音喚醒）：模型小、整張圖跑整數（以 int8 為主）、shape 固定、後端支援的 op 有限。
