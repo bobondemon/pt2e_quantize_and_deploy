@@ -6,7 +6,7 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/bobondemon/pt2e_quantize_and_deploy/blob/main/m01_hello_pt2e/00_overview.ipynb)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-寫在前頭的碎嘴
+寫在前頭的碎嘴 2026/11/14
 
 > 感覺現在做教材應該只剩 AI 會看, 但 AI 應該本身就已經有知識了\
 > 讓 AI 協助量化部署, 身為瓶頸的人類還需要懂嗎? 不知道, 至少此時此刻我想做經驗總結\
