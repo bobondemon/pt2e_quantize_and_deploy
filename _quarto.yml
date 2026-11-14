@@ -19,6 +19,7 @@ project:
     - m08_xnnpack_executorch/*.ipynb
     - m09_onnx_runtime/*.ipynb
     - m10_custom_backend/*.ipynb
+    - "!en/"      # 英文版是獨立的 Quarto 專案（en/_quarto.yml），不要被中文版收進來
 
 execute:
   enabled: false
@@ -32,9 +33,8 @@ website:
   navbar:
     background: primary
     right:
-      - text: "🌐 English"       # href 由 lang-switch.html 的 JS 換成「同一頁的英文版」
+      - text: '<span class="lang-mark">🌐 English</span>'       # href 由 lang-switch.html 的 JS 換成「同一頁的英文版」
         href: en/index.html
-        css-class: lang-switch
   repo-url: https://github.com/bobondemon/pt2e_quantize_and_deploy
   repo-actions: [source, issue]   # 每頁的「檢視原始檔」「回報問題」連結
   sidebar:
@@ -42,9 +42,8 @@ website:
     search: true
     tools:
       - icon: translate
-        text: English
+        text: '<span class="lang-mark">English</span>'
         href: en/index.html
-        css-class: lang-switch
       - icon: github
         href: https://github.com/bobondemon/pt2e_quantize_and_deploy
         aria-label: GitHub

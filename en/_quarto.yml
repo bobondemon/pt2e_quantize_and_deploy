@@ -31,9 +31,8 @@ website:
   navbar:
     background: primary
     right:
-      - text: "🌐 中文"       # href is rewritten by lang-switch.html to the same page in Chinese
+      - text: '<span class="lang-mark">🌐 中文</span>'       # href is rewritten by lang-switch.html to the same page in Chinese
         href: ../index.html
-        css-class: lang-switch
   repo-url: https://github.com/bobondemon/pt2e_quantize_and_deploy
   repo-subdir: en
   repo-actions: [source, issue]   # per-page "View source" / "Report an issue" links
@@ -42,9 +41,8 @@ website:
     search: true
     tools:
       - icon: translate
-        text: "中文"
+        text: '<span class="lang-mark">中文</span>'
         href: ../index.html
-        css-class: lang-switch
       - icon: github
         href: https://github.com/bobondemon/pt2e_quantize_and_deploy
         aria-label: GitHub
