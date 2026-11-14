@@ -125,6 +125,19 @@ uv run jupytext --to ipynb --output m01_hello_pt2e/01_minimal_ptq.ipynb \
 
 Don't leave a `.py` with the same name as a notebook in the repo: when a folder has a same-named `.py`, Quarto skips that `.ipynb`.
 
+### The shared TinyConvNet weights
+
+Training is not bit-reproducible across platforms (or even thread counts), but the numbers in the notebooks depend on the exact weights.
+So `common/tiny_net.pt` holds the weights of the trained `TinyConvNet` (epochs=20, seed=0; trained on macOS arm64), and `trained_tiny_net()` loads it instead of retraining.
+Every platform therefore quantizes the same model. To regenerate it (this changes the numbers in many notebooks, so rerun them afterwards):
+
+```bash
+uv run python tools/make_tiny_net_weights.py          # trains from scratch and writes common/tiny_net.pt
+uv run python tools/make_tiny_net_weights.py --check  # loads the file and prints check numbers
+```
+
+QAT training in M06 still starts from these weights but is not bit-reproducible, so those numbers can differ slightly between platforms.
+
 ### Verification
 
 There is no separate test suite. The `assert`s inside the notebooks check every claim in the course, so verification means rerunning all the notebooks

@@ -121,6 +121,19 @@ uv run jupytext --to ipynb --output m01_hello_pt2e/01_minimal_ptq.ipynb \
 
 repo 裡不要留和 notebook 同名的 `.py`：同一個資料夾有同名的 `.py` 時，Quarto 會略過那本 `.ipynb`。
 
+### 共用的 TinyConvNet 權重
+
+訓練在不同平台（甚至不同執行緒數）上不是逐位元可重現的，但 notebook 裡的數字取決於確切的權重。
+所以 `common/tiny_net.pt` 存了訓練好的 `TinyConvNet` 權重（epochs=20、seed=0，在 macOS arm64 上訓練），`trained_tiny_net()` 會直接載入而不重新訓練，
+讓每個平台量化的都是同一個模型。要重新產生它（會改變許多 notebook 的數字，產生後要重跑它們）：
+
+```bash
+uv run python tools/make_tiny_net_weights.py          # 從頭訓練並寫出 common/tiny_net.pt
+uv run python tools/make_tiny_net_weights.py --check  # 載入檔案並印出核對用的數字
+```
+
+M06 的 QAT 訓練雖然從這份權重出發，但訓練本身仍不是逐位元可重現的，所以那些數字在不同平台間可能略有差異。
+
 ### 驗證
 
 沒有另外的測試套件。notebook 裡的 `assert` 會檢查教材的每個主張，所以驗證就是重新執行所有 notebook
