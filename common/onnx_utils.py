@@ -71,6 +71,9 @@ def ort_session(model: onnx.ModelProto, level="ORT_ENABLE_ALL", providers=("CPUE
     """
     so = ort.SessionOptions()
     so.graph_optimization_level = LEVELS[level]
+    # On x86, ORT's QDQ fusion skips int8 activations unless this is set; arm fuses them by default.
+    # Setting it explicitly makes x86 and arm produce the same fused graph.
+    so.add_session_config_entry("session.qdqisint8allowed", "1")
     so.log_severity_level = 3  # errors only: when saving the optimized graph ORT warns that it "contains hardware-specific optimizations", which does not matter here
     if optimized_path:
         so.optimized_model_filepath = str(optimized_path)
